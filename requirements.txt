@@ -1,0 +1,16 @@
+# Core deep learning
+torch>=2.3.0
+ 
+# Model loading and running Llama 3.1 from Hugging Face
+transformers>=4.43.0
+accelerate>=0.30.0
+ 
+# Quantization libraries (used later for comparison against our own implementation)
+bitsandbytes>=0.43.0
+ 
+# Evaluation: perplexity needs raw text datasets, MMLU-style tasks need structured datasets
+datasets>=2.19.0
+ 
+# Utility: progress bars for long-running eval loops
+tqdm>=4.66.0
+ 
