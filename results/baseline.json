@@ -1,0 +1,5 @@
+{
+  "model": "meta-llama/Llama-3.1-8B-Instruct",
+  "precision": "bf16",
+  "perplexity": 11.442994117736816
+}
