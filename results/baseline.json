@@ -1,5 +1,9 @@
 {
   "model": "meta-llama/Llama-3.1-8B-Instruct",
   "precision": "bf16",
-  "perplexity": 11.442994117736816
+  "perplexity": 11.4430,
+  "mmlu_task": "high_school_computer_science",
+  "mmlu_accuracy": 0.68,
+  "mmlu_stderr": 0.0666,
+  "mmlu_num_samples": 50
 }

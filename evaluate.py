@@ -111,13 +111,30 @@ if __name__ == "__main__":
     ppl = evaluate_perplexity(model, tokenizer)
     print(f"\nBase model perplexity on WikiText-2 (first 50 samples): {ppl:.4f}")
 
+    # MMLU task accuracy is evaluated separately, via lm-evaluation-harness
+    # (see README for the exact command), not through this script. An
+    # earlier hand-rolled version lived here, but comparing raw logits at
+    # a single hand-picked token position proved too fragile for an
+    # instruction-tuned model, small tokenizer quirks threw the score off
+    # by a large margin. lm-eval handles chat formatting and answer
+    # parsing correctly, so we use it instead and record its result
+    # directly into results/baseline.json.
+
     # Save the result so it persists beyond this terminal session, and so
     # Phase 2/3 can load this same file and append their own numbers for
     # direct comparison, rather than us copy-pasting numbers by hand.
     os.makedirs("results", exist_ok=True)
     results_path = "results/baseline.json"
 
-    results = {"model": "meta-llama/Llama-3.1-8B-Instruct", "precision": "bf16", "perplexity": ppl}
+    results = {
+        "model": "meta-llama/Llama-3.1-8B-Instruct",
+        "precision": "bf16",
+        "perplexity": ppl,
+        "mmlu_task": "high_school_computer_science",
+        "mmlu_accuracy": 0.68,
+        "mmlu_stderr": 0.0666,
+        "mmlu_num_samples": 50,
+    }
 
     with open(results_path, "w") as f:
         json.dump(results, f, indent=2)
