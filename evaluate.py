@@ -102,6 +102,89 @@ def evaluate_perplexity(model, tokenizer, num_samples=50, stride=512):
     return perplexity
 
 
+def evaluate_latency(model, tokenizer, prompt="Explain the concept of gravity in simple terms.", max_new_tokens=50):
+    """
+    Measures generation speed in tokens per second.
+
+    Why a warm-up generation happens first, untimed: the first call to
+    model.generate() on a GPU includes one-time setup costs (CUDA kernels
+    compiling, memory allocator warming up) that have nothing to do with
+    the model's actual steady-state speed. Timing that first call would
+    make the model look artificially slower than it really is. So we
+    generate once without timing it, then time a second, real generation.
+
+    Why torch.cuda.synchronize() matters here: GPU operations in PyTorch
+    are launched asynchronously, meaning Python's timer can move on before
+    the GPU actually finishes the work. Without synchronize(), we'd measure
+    "how long it took to launch the work" instead of "how long the work
+    actually took." Calling synchronize() blocks until the GPU is truly done,
+    making our timing accurate.
+
+    Returns:
+        A float: tokens generated per second.
+    """
+    import time
+
+    inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
+
+    print("Running warm-up generation (untimed)...")
+    with torch.no_grad():
+        model.generate(**inputs, max_new_tokens=5, do_sample=False)
+
+    if torch.cuda.is_available():
+        torch.cuda.synchronize()
+
+    print("Running timed generation...")
+    start_time = time.time()
+    with torch.no_grad():
+        output_ids = model.generate(**inputs, max_new_tokens=max_new_tokens, do_sample=False)
+
+    if torch.cuda.is_available():
+        torch.cuda.synchronize()
+    end_time = time.time()
+
+    # output_ids includes the original prompt tokens plus the newly
+    # generated ones, so we subtract the prompt length to count only
+    # what was actually generated during our timed window.
+    num_new_tokens = output_ids.shape[1] - inputs["input_ids"].shape[1]
+    elapsed_seconds = end_time - start_time
+
+    tokens_per_second = num_new_tokens / elapsed_seconds
+    return tokens_per_second
+
+
+def evaluate_memory_footprint(model):
+    """
+    Measures two things: the model's size on disk (calculated from its
+    actual parameter count, not by checking file sizes, since that stays
+    accurate regardless of how accelerate splits the model across GPU/CPU/
+    disk), and the peak GPU memory used during the most recent inference.
+
+    Why we reset peak memory stats before calling this, elsewhere in the
+    script: torch.cuda.max_memory_allocated() reports the highest memory
+    usage since the last reset, not "right now." If we didn't reset it
+    before running generation, this number would be contaminated by
+    memory used during model LOADING, which behaves differently (and
+    less representatively of real usage) than actual inference.
+
+    Returns:
+        A dict with "model_size_gb" and "peak_vram_gb".
+    """
+    total_params = sum(p.numel() for p in model.parameters())
+
+    # BF16 uses 2 bytes per parameter. This calculation stays correct even
+    # for the quantized models in later phases, we'll just pass a different
+    # bytes-per-parameter value at that point (e.g. 0.5 for 4-bit).
+    bytes_per_param = 2
+    model_size_gb = (total_params * bytes_per_param) / (1024 ** 3)
+
+    peak_vram_gb = None
+    if torch.cuda.is_available():
+        peak_vram_gb = torch.cuda.max_memory_allocated() / (1024 ** 3)
+
+    return {"model_size_gb": model_size_gb, "peak_vram_gb": peak_vram_gb}
+
+
 if __name__ == "__main__":
     import json
     import os
@@ -110,6 +193,19 @@ if __name__ == "__main__":
     model, tokenizer = load_base_model()
     ppl = evaluate_perplexity(model, tokenizer)
     print(f"\nBase model perplexity on WikiText-2 (first 50 samples): {ppl:.4f}")
+
+    # Reset peak memory tracking HERE, right before the measurements we
+    # actually care about (latency, memory footprint), so loading-time
+    # memory usage doesn't contaminate the peak we report.
+    if torch.cuda.is_available():
+        torch.cuda.reset_peak_memory_stats()
+
+    tokens_per_second = evaluate_latency(model, tokenizer)
+    print(f"Base model latency: {tokens_per_second:.2f} tokens/sec")
+
+    memory_stats = evaluate_memory_footprint(model)
+    print(f"Base model size on disk: {memory_stats['model_size_gb']:.2f} GB")
+    print(f"Peak VRAM during generation: {memory_stats['peak_vram_gb']:.2f} GB")
 
     # MMLU task accuracy is evaluated separately, via lm-evaluation-harness
     # (see README for the exact command), not through this script. An
@@ -130,6 +226,9 @@ if __name__ == "__main__":
         "model": "meta-llama/Llama-3.1-8B-Instruct",
         "precision": "bf16",
         "perplexity": ppl,
+        "tokens_per_second": tokens_per_second,
+        "model_size_gb": memory_stats["model_size_gb"],
+        "peak_vram_gb": memory_stats["peak_vram_gb"],
         "mmlu_task": "high_school_computer_science",
         "mmlu_accuracy": 0.68,
         "mmlu_stderr": 0.0666,
