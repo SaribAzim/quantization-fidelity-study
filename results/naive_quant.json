@@ -1,0 +1,8 @@
+{
+  "model": "meta-llama/Llama-3.1-8B-Instruct",
+  "method": "naive_ptq_8bit",
+  "perplexity": 11.440422058105469,
+  "tokens_per_second": 0.0874052158252489,
+  "model_size_gb": 14.957527160644531,
+  "peak_vram_gb": 6.03567361831665
+}
