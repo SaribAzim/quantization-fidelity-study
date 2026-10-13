@@ -68,6 +68,28 @@ def load_base_model():
     return model, tokenizer
 
 
+def load_model_from(path_or_repo, device_map="auto"):
+    """
+    Loads ANY saved model folder (naive-quantized, GPTQ) or hub repo ID the
+    same way load_base_model does, so every phase is measured on an
+    identically-loaded model. Returns (model, tokenizer).
+
+    device_map="auto" lets accelerate split GPU/RAM/disk when the model is
+    too big (BF16 8B). Packed 4-bit models fit on the GPU, so they can pass
+    device_map={"": 0} to force everything onto GPU 0.
+    """
+    tokenizer = AutoTokenizer.from_pretrained(path_or_repo)
+    model = AutoModelForCausalLM.from_pretrained(
+        path_or_repo,
+        dtype=torch.bfloat16,
+        device_map=device_map,
+        offload_folder="offload",
+        low_cpu_mem_usage=True,
+    )
+    model.eval()
+    return model, tokenizer
+
+
 if __name__ == "__main__":
     # Quick manual test: load the model and generate one short response,
     # just to confirm loading works before we build the full eval harness

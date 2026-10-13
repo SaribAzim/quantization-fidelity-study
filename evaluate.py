@@ -102,6 +102,130 @@ def evaluate_perplexity(model, tokenizer, num_samples=50, stride=512):
     return perplexity
 
 
+# How many of the reference model's most likely tokens we keep per position
+# when measuring fidelity (see evaluate_perplexity_and_fidelity).
+FIDELITY_TOP_K = 256
+
+
+def evaluate_perplexity_and_fidelity(
+    model, tokenizer, reference_path, save_reference=False, num_samples=50, stride=512
+):
+    """
+    One pass over the SAME WikiText-2 slice and windows as evaluate_perplexity,
+    but it also measures how closely this model's predictions match the
+    original (base) model's, which is the actual question of this project.
+
+    WHY THIS EXISTS: perplexity is one number about "how well does the model
+    predict real text". Two models can have the same perplexity while
+    disagreeing on many individual predictions. Fidelity asks directly:
+      - top-1 agreement: how often does this model's single most likely next
+        token equal the base model's? (1.0 = identical choices)
+      - KL divergence: how far is this model's whole probability
+        distribution from the base model's, averaged over positions?
+        (0.0 = identical distributions, bigger = more different)
+
+    HOW: we run the base model once with save_reference=True. For every
+    position it stores the FIDELITY_TOP_K most likely tokens and their
+    log-probabilities (storing the whole 128k-token distribution for every
+    position would take gigabytes). Later models are compared against that
+    file. The KL is computed over those top-K tokens plus one "everything
+    else" bucket, which covers essentially all the probability mass.
+
+    The perplexity computed here is identical to evaluate_perplexity: same
+    text, same windows, same loss, same averaging.
+
+    Returns a dict with perplexity, kl_divergence, top1_agreement and
+    num_tokens. kl/top1 are None when this call is creating the reference.
+    """
+    import os
+
+    dataset = load_dataset("Salesforce/wikitext", "wikitext-2-raw-v1", split="test")
+    texts = [t for t in dataset["text"] if t.strip() != ""][:num_samples]
+    full_text = "\n\n".join(texts)
+    input_ids = tokenizer(full_text, return_tensors="pt").input_ids.to(model.device)
+
+    reference = None
+    if not save_reference:
+        reference = torch.load(reference_path)
+    saved_idx, saved_logp = [], []
+    ref_offset = 0
+
+    total_log_likelihood = 0.0
+    total_tokens = 0
+    total_kl = 0.0
+    total_agree = 0
+    total_positions = 0
+
+    seq_len = input_ids.size(1)
+    print(f"Running perplexity + fidelity over {seq_len} tokens...")
+    for start in range(0, seq_len, stride):
+        chunk = input_ids[:, start:min(start + stride, seq_len)]
+        if chunk.size(1) < 2:
+            continue  # a 1-token window has nothing to predict
+
+        with torch.no_grad():
+            outputs = model(chunk, labels=chunk)
+
+        total_log_likelihood += outputs.loss.item() * chunk.size(1)
+        total_tokens += chunk.size(1)
+
+        # Position i's logits predict token i+1, so the last position has no
+        # target inside this window and is dropped.
+        logits = outputs.logits[0, :-1].float()
+        log_norm = torch.logsumexp(logits, dim=-1, keepdim=True)
+        num_positions = logits.size(0)
+
+        if save_reference:
+            top_logits, top_idx = logits.topk(FIDELITY_TOP_K, dim=-1)
+            saved_idx.append(top_idx.cpu().int())
+            saved_logp.append((top_logits - log_norm).cpu())
+        else:
+            ref_idx = reference["top_idx"][ref_offset:ref_offset + num_positions].to(logits.device).long()
+            ref_logp = reference["top_logp"][ref_offset:ref_offset + num_positions].to(logits.device)
+            ref_offset += num_positions
+
+            cand_logp = logits.gather(-1, ref_idx) - log_norm  # same tokens, this model's log-probs
+
+            # Probability left over outside the top-K tokens, per model.
+            ref_tail = (1.0 - ref_logp.exp().sum(-1)).clamp(min=1e-9)
+            cand_tail = (1.0 - cand_logp.exp().sum(-1)).clamp(min=1e-9)
+            kl = (ref_logp.exp() * (ref_logp - cand_logp)).sum(-1) + ref_tail * (ref_tail.log() - cand_tail.log())
+
+            total_kl += kl.sum().item()
+            # Column 0 is the reference's most likely token (topk is sorted).
+            total_agree += (logits.argmax(-1) == ref_idx[:, 0]).sum().item()
+            total_positions += num_positions
+
+    perplexity = torch.exp(torch.tensor(total_log_likelihood / total_tokens)).item()
+
+    if save_reference:
+        os.makedirs(os.path.dirname(reference_path) or ".", exist_ok=True)
+        torch.save({"top_idx": torch.cat(saved_idx), "top_logp": torch.cat(saved_logp)}, reference_path)
+        print(f"Saved fidelity reference to {reference_path}")
+        return {"perplexity": perplexity, "kl_divergence": None, "top1_agreement": None, "num_tokens": total_tokens}
+
+    assert ref_offset == reference["top_idx"].size(0), "reference was made from different text/windows"
+    return {
+        "perplexity": perplexity,
+        "kl_divergence": total_kl / total_positions,
+        "top1_agreement": total_agree / total_positions,
+        "num_tokens": total_tokens,
+    }
+
+
+def is_fully_on_gpu(model):
+    """
+    True if every part of the model lives on the GPU. When accelerate has to
+    spill layers to CPU RAM or disk, each generated token drags those weights
+    back through the GPU, so tokens/sec then mostly measures disk and RAM
+    speed rather than the model. Such latency numbers are not comparable.
+    """
+    device_map = getattr(model, "hf_device_map", None)
+    if device_map is None:
+        return next(model.parameters()).is_cuda
+    return all(isinstance(d, int) or str(d).startswith("cuda") for d in device_map.values())
+
+
 def evaluate_latency(model, tokenizer, prompt="Explain the concept of gravity in simple terms.", max_new_tokens=50):
     """
     Measures generation speed in tokens per second.
@@ -170,19 +294,45 @@ def evaluate_memory_footprint(model):
     Returns:
         A dict with "model_size_gb" and "peak_vram_gb".
     """
-    total_params = sum(p.numel() for p in model.parameters())
-
-    # BF16 uses 2 bytes per parameter. This calculation stays correct even
-    # for the quantized models in later phases, we'll just pass a different
-    # bytes-per-parameter value at that point (e.g. 0.5 for 4-bit).
-    bytes_per_param = 2
-    model_size_gb = (total_params * bytes_per_param) / (1024 ** 3)
+    # Count real bytes: numel * bytes-per-element for every parameter AND
+    # buffer. Buffers matter because packed GPTQ models store their 4-bit
+    # weights in buffers (qweight, scales, zeros), not in parameters, and
+    # the old "params * 2 bytes" rule would have both ignored them and
+    # reported a quantized model as if it were BF16.
+    total_bytes = sum(p.numel() * p.element_size() for p in model.parameters())
+    total_bytes += sum(b.numel() * b.element_size() for b in model.buffers())
+    model_size_gb = total_bytes / (1024 ** 3)
 
     peak_vram_gb = None
     if torch.cuda.is_available():
         peak_vram_gb = torch.cuda.max_memory_allocated() / (1024 ** 3)
 
     return {"model_size_gb": model_size_gb, "peak_vram_gb": peak_vram_gb}
+
+
+def estimate_packed_size_gb(model, num_bits, group_size=-1):
+    """
+    How big this model WOULD be on disk if the quantized Linear weights were
+    stored packed at num_bits (fake-quantized models are stored in BF16, so
+    their real file size says nothing about the saving).
+
+    Per quantized weight: numel * num_bits / 8 bytes, plus the scale (2 bytes,
+    BF16) and zero-point (num_bits/8 bytes) for each row (group_size=-1) or
+    each group of `group_size` input columns. Everything else (embeddings,
+    lm_head, norms) stays BF16.
+    """
+    from quantization.quantize_checkpoint import is_quantizable
+
+    total_bytes = 0.0
+    for name, p in model.named_parameters():
+        if is_quantizable(name):
+            rows, cols = p.shape
+            groups_per_row = 1 if group_size == -1 else cols // group_size
+            total_bytes += p.numel() * num_bits / 8
+            total_bytes += rows * groups_per_row * (2 + num_bits / 8)
+        else:
+            total_bytes += p.numel() * p.element_size()
+    return total_bytes / (1024 ** 3)
 
 
 if __name__ == "__main__":
