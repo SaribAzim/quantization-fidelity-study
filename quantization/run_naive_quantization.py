@@ -36,10 +36,31 @@ from quantization.naive_ptq import apply_naive_quantization
 
 
 if __name__ == "__main__":
+    # Change this to run the same pipeline at a different bit width.
+    # We already have 8-bit results saved (results/naive_quant_8bit.json).
+    # 8-bit is known to be nearly lossless, which is exactly what we saw,
+    # perplexity barely moved. The more revealing test is 4-bit, where
+    # naive (uncalibrated) rounding starts to genuinely hurt accuracy,
+    # this sets up the real comparison against GPTQ in Phase 3.
+    NUM_BITS = 8
+
     model, tokenizer = load_base_model()
 
-    print("\nApplying naive 8-bit quantization to all Linear layers...")
-    model = apply_naive_quantization(model, num_bits=8)
+    print(f"\nApplying naive {NUM_BITS}-bit quantization to all Linear layers...")
+    model = apply_naive_quantization(model, num_bits=NUM_BITS)
+
+    # Save the quantized weights to disk BEFORE evaluation. Two reasons:
+    # 1. lm-evaluation-harness (used for MMLU) loads a model from a path or
+    #    repo ID, not from an in-memory Python object, so it needs this
+    #    saved copy to run against.
+    # 2. Saving first means that even if evaluation crashes afterward, we
+    #    still have the quantized weights on disk and don't have to redo
+    #    the (slow) loading and quantization steps from scratch.
+    save_path = f"quantized_models/naive_{NUM_BITS}bit"
+    print(f"\nSaving quantized model to {save_path} (for MMLU evaluation via lm-eval-harness)...")
+    model.save_pretrained(save_path)
+    tokenizer.save_pretrained(save_path)
+    print("Save complete.")
 
     print("\nEvaluating quantized model...")
     ppl = evaluate_perplexity(model, tokenizer)
@@ -66,7 +87,7 @@ if __name__ == "__main__":
 
     results = {
         "model": "meta-llama/Llama-3.1-8B-Instruct",
-        "method": "naive_ptq_8bit",
+        "method": f"naive_ptq_{NUM_BITS}bit",
         "perplexity": ppl,
         "tokens_per_second": tokens_per_second,
         "model_size_gb": memory_stats["model_size_gb"],
@@ -74,7 +95,7 @@ if __name__ == "__main__":
     }
 
     os.makedirs("results", exist_ok=True)
-    results_path = "results/naive_quant.json"
+    results_path = f"results/naive_quant_{NUM_BITS}bit.json"
     with open(results_path, "w") as f:
         json.dump(results, f, indent=2)
 

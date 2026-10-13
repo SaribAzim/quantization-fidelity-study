@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.pyc
+venv/
+.venv/
+ 
+# Model weights and downloaded artifacts (these are gigabytes)
+models/
+*.safetensors
+*.bin
+*.gguf
+ 
+# Hugging Face cache if it ends up inside the repo folder
+.cache/
+ 
+# Environment variables (API keys, tokens)
+.env
+ 
+# Jupyter checkpoints
+.ipynb_checkpoints/
+ 
+# OS files
+.DS_Store
+ 
+# Run logs and local caches
+logs/
+offload/
+

@@ -1,0 +1,12 @@
+{
+  "model": "meta-llama/Llama-3.1-8B-Instruct",
+  "precision": "bf16",
+  "perplexity": 11.442994117736816,
+  "tokens_per_second": 0.09658678840877001,
+  "model_size_gb": 14.957527160644531,
+  "peak_vram_gb": 6.03567361831665,
+  "mmlu_task": "high_school_computer_science",
+  "mmlu_accuracy": 0.68,
+  "mmlu_stderr": 0.0666,
+  "mmlu_num_samples": 50
+}

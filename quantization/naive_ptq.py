@@ -66,6 +66,16 @@ def apply_naive_quantization(model, num_bits=8):
     bookkeeping (gradients, optimizer state) that we're not using anyway
     since we're doing inference-only evaluation, not training.
 
+    IMPORTANT DIAGNOSTIC, added after noticing a real risk: when a model is
+    loaded with device_map="auto" and disk offloading, some layers may
+    still be "meta" tensors at this point, placeholders with a shape and
+    dtype but NO actual data, waiting to be materialized just before use.
+    If we tried to quantize a meta tensor, the operation would silently
+    produce another meta tensor (no real computation, no error either),
+    meaning that layer's weights would NOT actually get quantized despite
+    the code appearing to run successfully. We explicitly check for this
+    and report it, rather than silently trusting that everything worked.
+
     Args:
         model: an already-loaded HuggingFace causal LM
         num_bits: bit width to quantize each Linear layer's weights to
@@ -76,9 +86,17 @@ def apply_naive_quantization(model, num_bits=8):
         even though modification happens in place either way).
     """
     num_layers_quantized = 0
+    num_layers_skipped_meta = 0
 
     for name, module in model.named_modules():
         if isinstance(module, nn.Linear):
+            if module.weight.data.is_meta:
+                # This layer's weight has no real data right now, quantizing
+                # it would be a silent no-op. We skip it explicitly and
+                # count it, rather than pretending we quantized it.
+                num_layers_skipped_meta += 1
+                continue
+
             original_dtype = module.weight.data.dtype
 
             # Quantization math is done in float32 for numerical stability
@@ -92,4 +110,12 @@ def apply_naive_quantization(model, num_bits=8):
             num_layers_quantized += 1
 
     print(f"Applied {num_bits}-bit naive quantization to {num_layers_quantized} Linear layers.")
+    if num_layers_skipped_meta > 0:
+        print(
+            f"WARNING: {num_layers_skipped_meta} Linear layers were on the meta device "
+            f"(no real data present yet) and were SKIPPED, not quantized. This means "
+            f"the model is only PARTIALLY quantized. See the note in this file's "
+            f"docstring for why this happens and how to fix it."
+        )
+
     return model
