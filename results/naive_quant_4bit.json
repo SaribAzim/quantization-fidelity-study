@@ -1,8 +1,46 @@
 {
   "model": "meta-llama/Llama-3.1-8B-Instruct",
-  "method": "naive_ptq_4bit",
-  "perplexity": 12.41163444519043,
-  "tokens_per_second": 0.07493112047775684,
-  "model_size_gb": 14.957527160644531,
-  "peak_vram_gb": 6.03567361831665
+  "method": "naive_ptq",
+  "bits": 4,
+  "group_size": -1,
+  "fully_on_gpu": false,
+  "perplexity": 14.708826065063477,
+  "kl_divergence": 0.2800824341309002,
+  "top1_agreement": 0.7430688336520076,
+  "num_tokens": 4193,
+  "tokens_per_second": 0.562386417976697,
+  "model_size_gb": 14.95752763748169,
+  "peak_vram_gb": 6.03567361831665,
+  "packed_size_gb_estimate": 5.210731506347656,
+  "mmlu_task": "high_school_computer_science",
+  "mmlu_accuracy": 0.58,
+  "mmlu_stderr": 0.07050835816716038,
+  "mmlu_num_samples": 50,
+  "mmlu_extended_cs": {
+    "accuracy": 0.5121359223300971,
+    "stderr": 0.02465591529628955,
+    "n": 412,
+    "per_task": {
+      "mmlu_high_school_computer_science": {
+        "accuracy": 0.54,
+        "stderr": 0.050090826596203314,
+        "n": 100
+      },
+      "mmlu_college_computer_science": {
+        "accuracy": 0.4,
+        "stderr": 0.04923659639173309,
+        "n": 100
+      },
+      "mmlu_computer_security": {
+        "accuracy": 0.71,
+        "stderr": 0.045604802157206865,
+        "n": 100
+      },
+      "mmlu_machine_learning": {
+        "accuracy": 0.4107142857142857,
+        "stderr": 0.04669510663875191,
+        "n": 112
+      }
+    }
+  }
 }

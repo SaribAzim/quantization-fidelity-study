@@ -32,7 +32,20 @@ Every phase (base model, naive-quantized, GPTQ-quantized, RAG-augmented) is meas
 
 ## Status
 
-Project in progress. This README will be updated with results as each phase completes.
+Project in progress. Phases 0-2 done (baseline, naive quantization of all 224 decoder Linear layers).
+
+### Phase 2 results (naive per-channel round-to-nearest, fake-quantized)
+
+| | Base BF16 | Naive 8-bit | Naive 4-bit |
+|---|---|---|---|
+| Perplexity (WikiText-2) | 11.443 | 11.463 | 14.709 |
+| KL divergence vs base | - | 0.0016 | 0.280 |
+| Top-1 agreement with base | - | 97.8% | 74.3% |
+| MMLU CS, first 50 q (stderr ~0.07) | 0.66 | 0.66 | 0.58 |
+| MMLU CS extended, 412 q (stderr ~0.025) | 0.556 | 0.558 | 0.512 |
+| Size if packed (GB, estimate) | 14.96 | 8.46 | 5.21 |
+
+Notes: the earlier partial-quantization numbers (only 70/225 layers) are kept in `results/archive/`. Fake-quantized models run with disk offload, so their tokens/sec are not comparable and are not a result. Run `python quantization/quantize_checkpoint.py --bits N` then `python quantization/evaluate_checkpoint.py ...` (see its docstring).
 
 ## Hardware
 
