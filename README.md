@@ -45,6 +45,20 @@ Project in progress. Phases 0-2 done (baseline, naive quantization of all 224 de
 | MMLU CS extended, 412 q (stderr ~0.025) | 0.556 | 0.558 | 0.512 |
 | Size if packed (GB, estimate) | 14.96 | 8.46 | 5.21 |
 
+### Phase 3 results (GPTQ written from scratch, 4-bit, group size 128)
+
+`gptqmodel` does not build on this Windows setup, so GPTQ is implemented in `quantization/gptq.py` and run layer by layer (`quantization/run_gptq.py`, fits 8 GB VRAM). All models below use 4 bits.
+
+| | Naive per-row | Naive g128 | GPTQ g128 (calibrated on 2048-token text) | GPTQ g128 (calibrated on 512-token text) |
+|---|---|---|---|---|
+| Perplexity, 512-token windows (base 11.443) | 14.709 | 12.291 | 19.451 | 12.721 |
+| KL divergence vs base | 0.280 | 0.085 | 0.543 | 0.100 |
+| Top-1 agreement with base | 74.3% | 86.5% | 80.3% | 88.4% |
+| MMLU CS, 412 q (base 0.556) | 0.512 | 0.546 | 0.534 | 0.546 |
+| Perplexity, 2048-token windows (base 8.053) | - | 8.601 | 8.392 | 8.458 |
+
+Findings: group-wise rounding helps naive quantization a lot. GPTQ overfits to the window length of its calibration text (2048-token calibration collapses on 512-token test windows), so calibration text must match real use. After recalibrating on 512-token windows, GPTQ and naive g128 are about equal on short text (identical exam score) and GPTQ is better on long text. Diagnostics are in `quantization/diagnose_gptq*.py` and `quantization/chain_eval.py`.
+
 Notes: the earlier partial-quantization numbers (only 70/225 layers) are kept in `results/archive/`. Fake-quantized models run with disk offload, so their tokens/sec are not comparable and are not a result. Run `python quantization/quantize_checkpoint.py --bits N` then `python quantization/evaluate_checkpoint.py ...` (see its docstring).
 
 ## Hardware
