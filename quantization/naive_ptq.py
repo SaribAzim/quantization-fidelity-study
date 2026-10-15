@@ -52,6 +52,23 @@ def quantize_tensor_per_channel(weight, num_bits=8):
     return dequantized_weight
 
 
+def quantize_tensor_per_group(weight, num_bits=8, group_size=128):
+    """
+    Same rounding as quantize_tensor_per_channel, but each scale/zero-point
+    covers only `group_size` neighbouring weights of a row instead of the
+    whole row. Smaller groups follow the weights' local range more closely,
+    so there is less rounding error, at the cost of storing more scales.
+
+    Trick: a row-major matrix of shape (rows, cols) reshaped to
+    (rows * cols / group_size, group_size) puts each group on its own row,
+    so the verified per-channel function can be reused unchanged.
+    """
+    rows, cols = weight.shape
+    assert cols % group_size == 0, f"{cols} columns not divisible by group size {group_size}"
+    grouped = weight.reshape(rows * cols // group_size, group_size)
+    return quantize_tensor_per_channel(grouped, num_bits=num_bits).reshape(rows, cols)
+
+
 def apply_naive_quantization(model, num_bits=8):
     """
     Walks through every nn.Linear layer in the model and replaces its

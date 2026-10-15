@@ -40,7 +40,7 @@ from safetensors.torch import save_file
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from quantization.naive_ptq import quantize_tensor_per_channel
+from quantization.naive_ptq import quantize_tensor_per_channel, quantize_tensor_per_group
 
 MODEL_NAME = "meta-llama/Llama-3.1-8B-Instruct"
 
@@ -66,7 +66,7 @@ def is_quantizable(tensor_name):
     return QUANTIZABLE_PATTERN.match(tensor_name) is not None
 
 
-def quantize_shard(src_path, dst_path, num_bits, device):
+def quantize_shard(src_path, dst_path, num_bits, device, group_size=-1):
     """
     Reads one .safetensors shard, quantizes the Linear weights in it, and
     writes the result. Tensors are handled one at a time so only the OUTPUT
@@ -86,7 +86,10 @@ def quantize_shard(src_path, dst_path, num_bits, device):
                 original_dtype = tensor.dtype
                 # Math in float32 for stability, same as naive_ptq.py.
                 weight_fp32 = tensor.to(device=device, dtype=torch.float32)
-                dequantized = quantize_tensor_per_channel(weight_fp32, num_bits=num_bits)
+                if group_size == -1:
+                    dequantized = quantize_tensor_per_channel(weight_fp32, num_bits=num_bits)
+                else:
+                    dequantized = quantize_tensor_per_group(weight_fp32, num_bits, group_size)
                 output_tensors[name] = dequantized.to(original_dtype).cpu().contiguous()
                 num_quantized += 1
             else:
@@ -97,7 +100,7 @@ def quantize_shard(src_path, dst_path, num_bits, device):
     return num_quantized, num_copied
 
 
-def quantize_checkpoint(src_dir, out_dir, num_bits, device):
+def quantize_checkpoint(src_dir, out_dir, num_bits, device, group_size=-1):
     """Quantizes every shard in src_dir and writes a complete model folder."""
     os.makedirs(out_dir, exist_ok=True)
 
@@ -117,6 +120,7 @@ def quantize_checkpoint(src_dir, out_dir, num_bits, device):
             os.path.join(out_dir, shard_file),
             num_bits,
             device,
+            group_size,
         )
         total_quantized += n_q
         total_copied += n_c
@@ -150,16 +154,18 @@ def find_cached_snapshot():
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--bits", type=int, required=True, choices=[2, 3, 4, 5, 6, 8])
+    parser.add_argument("--group-size", type=int, default=-1, help="-1 = one scale per row (per-channel)")
     parser.add_argument("--src", default=None, help="folder with the original .safetensors shards")
     parser.add_argument("--out", default=None, help="output folder")
     args = parser.parse_args()
 
     src_dir = args.src or find_cached_snapshot()
-    out_dir = args.out or f"quantized_models/naive_{args.bits}bit"
+    suffix = "" if args.group_size == -1 else f"_g{args.group_size}"
+    out_dir = args.out or f"quantized_models/naive_{args.bits}bit{suffix}"
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     print(f"Source: {src_dir}\nOutput: {out_dir}\nDevice: {device}\n")
-    n_quantized, n_copied = quantize_checkpoint(src_dir, out_dir, args.bits, device)
+    n_quantized, n_copied = quantize_checkpoint(src_dir, out_dir, args.bits, device, args.group_size)
 
     # Llama 3.1 8B: 32 layers x 7 Linear weights = 224. Fail loudly if not,
     # this is exactly the silent-skip failure the old approach had.

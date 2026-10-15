@@ -155,7 +155,7 @@ def main():
         memory = evaluate_memory_footprint(model)
         results["model_size_gb"] = memory["model_size_gb"]
         results["peak_vram_gb"] = memory["peak_vram_gb"]
-        if args.bits < 16 and args.method.startswith("naive"):
+        if args.bits < 16:  # every fake-quantized method (naive_ptq, gptq_fake)
             # Fake-quantized models are stored as BF16; this is what a packed
             # file of the same weights would take.
             results["packed_size_gb_estimate"] = estimate_packed_size_gb(model, args.bits, args.group_size)
