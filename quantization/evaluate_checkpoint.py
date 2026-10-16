@@ -107,8 +107,51 @@ def run_mmlu(model, tokenizer, name):
     }
 
 
+def run_mmlu_with_scorer(model, tokenizer, name, batch_size=16, compare_predictions=None):
+    """
+    The same 412 questions, scored by our own scorer (rag/scorer.py, validated to match lm-eval on 404/412
+    questions). Used for packed models, where lm-eval's full-vocabulary logits would not fit next to the model.
+    Writes the same per-question file format as run_mmlu, so models can be compared question by question.
+    """
+    from rag.mcq import SUBJECTS, load_questions
+    from rag.scorer import build_prompt, score_prompts
+
+    questions = load_questions()
+    scores = score_prompts(model, tokenizer, [build_prompt(tokenizer, q) for q in questions], batch_size)
+    preds = [max(range(4), key=lambda i: s[i]) for s in scores]
+    flags = [int(p == q["answer"]) for p, q in zip(preds, questions)]
+
+    per_question = {f"mmlu_{s}": [] for s in SUBJECTS}
+    for q, f in zip(questions, flags):
+        per_question[f"mmlu_{q['subject']}"].append((q["doc_id"], f))
+    os.makedirs("results/samples", exist_ok=True)
+    with open(f"results/samples/{name}_mmlu.json", "w") as f:
+        json.dump(per_question, f)
+    json.dump({"predictions": preds, "letter_logprobs": scores}, open(f"results/samples/{name}_mmlu_scores.json", "w"))
+
+    per_task = {}
+    for task, pairs in per_question.items():
+        acc, se = accuracy_and_stderr([c for _, c in pairs])
+        per_task[task] = {"accuracy": acc, "stderr": se, "n": len(pairs)}
+    ext_acc, ext_se = accuracy_and_stderr(flags)
+    original = [c for d, c in per_question[f"mmlu_{ORIGINAL_TASK.replace('mmlu_', '')}"] if d < ORIGINAL_N]
+    orig_acc, orig_se = accuracy_and_stderr(original)
+    result = {"mmlu_task": "high_school_computer_science", "mmlu_accuracy": orig_acc, "mmlu_stderr": orig_se,
+              "mmlu_num_samples": len(original),
+              "mmlu_extended_cs": {"accuracy": ext_acc, "stderr": ext_se, "n": len(flags), "per_task": per_task}}
+    if compare_predictions:
+        reference = json.load(open(compare_predictions))["predictions"]
+        same = sum(1 for a, b in zip(preds, reference) if a == b)
+        result["agreement_with_reference_predictions"] = same / len(preds)
+        print(f"Answers identical to {compare_predictions} on {same}/{len(preds)} questions", flush=True)
+    return result
+
+
 def main():
     parser = argparse.ArgumentParser()
+    parser.add_argument("--packed", action="store_true", help="model folder is a REAL packed 4/8-bit model (quantization/make_packed.py)")
+    parser.add_argument("--adapters", default=None, help="QLoRA adapter file to attach to a packed model")
+    parser.add_argument("--compare-predictions", default=None, help="results/rag/<x>_none.json to compare answers with")
     parser.add_argument("--model", required=True, help="model folder or hub repo ID")
     parser.add_argument("--name", required=True, help="results/<name>.json")
     parser.add_argument("--method", required=True)
@@ -137,7 +180,14 @@ def main():
         return
 
     print(f"Loading {args.model} ...")
-    model, tokenizer = load_model_from(args.model, device_map={"": 0} if args.gpu_only else "auto")
+    if args.packed:
+        from quantization.packed import load_lora_state, load_packed_model
+        model, tokenizer = load_packed_model(args.model)
+        if args.adapters:
+            load_lora_state(model, torch.load(args.adapters))
+            print(f"Attached LoRA adapters from {args.adapters}", flush=True)
+    else:
+        model, tokenizer = load_model_from(args.model, device_map={"": 0} if args.gpu_only else "auto")
     results["fully_on_gpu"] = is_fully_on_gpu(model)
 
     if need_fidelity:
@@ -155,7 +205,7 @@ def main():
         memory = evaluate_memory_footprint(model)
         results["model_size_gb"] = memory["model_size_gb"]
         results["peak_vram_gb"] = memory["peak_vram_gb"]
-        if args.bits < 16:  # every fake-quantized method (naive_ptq, gptq_fake)
+        if args.bits < 16 and not args.packed:  # every fake-quantized method (naive_ptq, gptq_fake)
             # Fake-quantized models are stored as BF16; this is what a packed
             # file of the same weights would take.
             results["packed_size_gb_estimate"] = estimate_packed_size_gb(model, args.bits, args.group_size)
@@ -163,7 +213,10 @@ def main():
         save()
 
     if need_mmlu:
-        results.update(run_mmlu(model, tokenizer, args.name))
+        if args.packed:
+            results.update(run_mmlu_with_scorer(model, tokenizer, args.name, compare_predictions=args.compare_predictions))
+        else:
+            results.update(run_mmlu(model, tokenizer, args.name))
         print(f"MMLU n=50: {results['mmlu_accuracy']:.3f}  extended CS: {results['mmlu_extended_cs']['accuracy']:.3f}")
         save()
 
