@@ -72,6 +72,21 @@ Library: 10,751 passages from about 780 Wikipedia computer-science articles (`ra
 
 Neither retrieval mode recovered any of the 4.4-point loss on this exam. Reasons are discussed (untested) in `progress3.pdf`. Run: `python rag/run_rag_eval.py --model quantized_models/naive_4bit --name naive_quant_4bit --modes none hyde_gen plain hyde`.
 
+### Real 4-bit storage and QLoRA (naive 4-bit per row)
+
+`quantization/make_packed.py` stores the RTN 4-bit model as real packed integers (two per byte, plus per-row scale and zero-point) instead of 16-bit fake values: **5.22 GB instead of 14.96 GB**, fully on the 8 GB GPU (peak 5.89 GB). Unpacked weights are bit-identical to the fake-quantized ones (`test_packed.py`, plus a check on real layers), so results match the earlier model up to floating-point noise.
+
+QLoRA (`quantization/train_qlora.py`): frozen packed 4-bit model, 41.9 M trainable LoRA parameters (rank 16), trained on WikiText-2 train windows of 512 tokens, 1 M tokens, 74 minutes, peak 6.06 GB VRAM. Fixed settings chosen before looking at the exam.
+
+| | Original | RTN 4-bit (packed) | RTN 4-bit + QLoRA |
+|---|---|---|---|
+| Perplexity (WikiText-2) | 11.44 | 14.70 | **9.63** |
+| KL divergence from original | - | 0.281 | 0.445 |
+| Same top word as original | 100% | 74.3% | 77.3% |
+| CS exam, 412 questions | 55.6% | 50.5% | 48.5% |
+
+QLoRA fixed 47 exam answers and broke 55 (sign test p = 0.49): no recovery. Perplexity fell below the original model's because the adapters learned WikiText's style, while fidelity to the original (KL) got worse: next-word prediction on raw text is not the same objective as matching the original model. Distillation from the original model is the natural next experiment. Details in `progress4.pdf`.
+
 Notes: the earlier partial-quantization numbers (only 70/225 layers) are kept in `results/archive/`. Fake-quantized models run with disk offload, so their tokens/sec are not comparable and are not a result. Run `python quantization/quantize_checkpoint.py --bits N` then `python quantization/evaluate_checkpoint.py ...` (see its docstring).
 
 ## Hardware
