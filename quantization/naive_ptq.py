@@ -32,6 +32,23 @@ def quantize_tensor_per_channel(weight, num_bits=8):
     See test_tensor_quantization_numpy.py for the verified version of this
     exact logic, this is the same math, using torch instead of numpy so it
     works directly on the model's actual weight tensors.
+
+    The rounding itself lives in quantize_tensor_to_integers below (which
+    also keeps the small integers, for real packed storage); this function
+    just converts those integers back to floats.
+    """
+    quantized, scales, zero_points = quantize_tensor_to_integers(weight, num_bits)
+    return (quantized - zero_points) * scales
+
+
+def quantize_tensor_to_integers(weight, num_bits=8):
+    """
+    The same per-row rounding as above, but returns what REAL quantization
+    would store instead of converting back to floats:
+        quantized    the small integers (0 .. 2**num_bits - 1), as floats
+        scales       one per row, shape (rows, 1)
+        zero_points  one per row, shape (rows, 1)
+    Dequantizing is (quantized - zero_points) * scales.
     """
     quant_min = 0
     quant_max = (2 ** num_bits) - 1
@@ -48,8 +65,21 @@ def quantize_tensor_per_channel(weight, num_bits=8):
     quantized = torch.round(weight / scales) + zero_points
     quantized = torch.clamp(quantized, quant_min, quant_max)
 
-    dequantized_weight = (quantized - zero_points) * scales
-    return dequantized_weight
+    return quantized, scales, zero_points
+
+
+def quantize_tensor_to_integers_grouped(weight, num_bits=8, group_size=128):
+    """
+    Grouped version of quantize_tensor_to_integers (same reshape trick as
+    quantize_tensor_per_group). Returns quantized with shape (rows, cols) and
+    scales / zero_points with shape (rows, cols // group_size).
+    """
+    rows, cols = weight.shape
+    assert cols % group_size == 0, f"{cols} columns not divisible by group size {group_size}"
+    quantized, scales, zero_points = quantize_tensor_to_integers(
+        weight.reshape(rows * cols // group_size, group_size), num_bits)
+    return (quantized.reshape(rows, cols), scales.reshape(rows, cols // group_size),
+            zero_points.reshape(rows, cols // group_size))
 
 
 def quantize_tensor_per_group(weight, num_bits=8, group_size=128):
