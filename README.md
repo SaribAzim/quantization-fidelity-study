@@ -59,6 +59,19 @@ Project in progress. Phases 0-2 done (baseline, naive quantization of all 224 de
 
 Findings: group-wise rounding helps naive quantization a lot. GPTQ overfits to the window length of its calibration text (2048-token calibration collapses on 512-token test windows), so calibration text must match real use. After recalibrating on 512-token windows, GPTQ and naive g128 are about equal on short text (identical exam score) and GPTQ is better on long text. Diagnostics are in `quantization/diagnose_gptq*.py` and `quantization/chain_eval.py`.
 
+### Phase 4 results (RAG and HyDE on the naive 4-bit per-row model)
+
+Library: 10,751 passages from about 780 Wikipedia computer-science articles (`rag/build_corpus.py`, contamination-checked against the exam), embedded with `BAAI/bge-small-en-v1.5` and searched by a plain matrix product (`rag/`). Same 412 CS exam questions, same naive 4-bit model, top-3 passages. The scorer (`rag/scorer.py`) matches lm-eval question by question on 404/412 questions with retrieval off.
+
+| Naive 4-bit (per row), 412 questions | Accuracy | Fixed / broken vs no RAG | Sign test |
+|---|---|---|---|
+| Original model, no RAG (target) | 55.6% | - | - |
+| No RAG | 51.2% | - | - |
+| Plain RAG | 49.3% | 53 / 61 | p = 0.51 |
+| HyDE RAG | 51.2% | 53 / 53 | p = 1.00 |
+
+Neither retrieval mode recovered any of the 4.4-point loss on this exam. Reasons are discussed (untested) in `progress3.pdf`. Run: `python rag/run_rag_eval.py --model quantized_models/naive_4bit --name naive_quant_4bit --modes none hyde_gen plain hyde`.
+
 Notes: the earlier partial-quantization numbers (only 70/225 layers) are kept in `results/archive/`. Fake-quantized models run with disk offload, so their tokens/sec are not comparable and are not a result. Run `python quantization/quantize_checkpoint.py --bits N` then `python quantization/evaluate_checkpoint.py ...` (see its docstring).
 
 ## Hardware
