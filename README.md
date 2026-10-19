@@ -101,6 +101,21 @@ QLoRA fixed 47 exam answers and broke 55 (sign test p = 0.49): no recovery. Perp
 
 The "types" layout recovers 4.4 of the 5.1 lost exam points (56 answers fixed, 38 broken vs the 4-bit baseline, p = 0.08) and matches the original on 3 of 4 subjects; protecting a few whole layers improved fidelity but not the exam. A finer ruler (groups of 128) reaches similar quality at a smaller size, so the two fixes could be combined (not yet tried). Details in `progress5.pdf`.
 
+### Groups of 128 combined with mixed precision (real packed models)
+
+The sensitivity test was re-run on the packed groups-of-128 model (same layers matter most, but about 4x less: layer 1 changes the output by KL 0.015 instead of 0.059). `plan_mixed.py 0.5 _g128` builds layouts with a +0.5 GB budget.
+
+| 4-bit model (all real packed) | Total size | KL from original | Same top word | Perplexity | CS exam, 412 q |
+|---|---|---|---|---|---|
+| Original | 15 GB | - | 100% | 11.44 | 55.6% |
+| Per row | 5.22 GB | 0.281 | 74.3% | 14.70 | 50.5% |
+| Per row + v, k, o, down at 8-bit | 6.11 GB | 0.076 | 87.1% | 12.28 | 54.9% |
+| Groups of 128 | 5.61 GB | 0.085 | 86.4% | 12.29 | 54.1% |
+| **Groups of 128 + layers 0, 1, 31 at 8-bit** | 5.92 GB | **0.048** | **89.8%** | 12.09 | 54.1% |
+| Groups of 128 + v, k, o (and half of q) at 8-bit | 6.11 GB | 0.064 | 88.6% | 12.07 | 54.6% |
+
+The combination gives the best fidelity of any 4-bit model (KL 0.048), at a smaller size than the per-row mixed-precision model. The exam sits at its noise floor (about 2.5 points) for all of these, so it can no longer separate them. **Size note:** the packed groups-of-128 model is 5.61 GB, not the roughly 5.3 GB earlier estimated, because the packed format stores 32-bit scales and zero-points; a leaner format would be about 5.3 GB. `evaluation/plot_results.py` regenerates all figures (`results/figures/`) and `results/summary.md`; `evaluation/make_details_pdf.py` builds `details.pdf`.
+
 Notes: the earlier partial-quantization numbers (only 70/225 layers) are kept in `results/archive/`. Fake-quantized models run with disk offload, so their tokens/sec are not comparable and are not a result. Run `python quantization/quantize_checkpoint.py --bits N` then `python quantization/evaluate_checkpoint.py ...` (see its docstring).
 
 ## Hardware
