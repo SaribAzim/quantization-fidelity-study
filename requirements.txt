@@ -16,6 +16,10 @@ lm_eval>=0.4.0
 # Retrieval (RAG / HyDE) downloads Wikipedia text through its public web interface
 requests>=2.31.0
 
+# Local live backend for the website (deployment/server.py)
+fastapi>=0.110.0
+uvicorn>=0.29.0
+
 # Figures and the PDF reports (all generated from results/*.json)
 matplotlib>=3.8.0
 reportlab>=4.0.0

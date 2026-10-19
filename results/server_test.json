@@ -1,0 +1,35 @@
+{
+ "checks": [
+  [
+   "Health endpoint",
+   "answers; GPU: NVIDIA GeForce RTX 3060 Ti"
+  ],
+  [
+   "Model list",
+   "6 runnable models found on disk"
+  ],
+  [
+   "Streaming (g128_l0131)",
+   "24 word pieces streamed at 1.57 per second, 34 s including loading"
+  ],
+  [
+   "Swapping models",
+   "per_row_vkod loaded in place of g128_l0131; GPU memory 7596 MB before, 7789 MB after"
+  ],
+  [
+   "Limits",
+   "a 2,001 character prompt is refused (422); the original, which cannot run here, is refused (404)"
+  ],
+  [
+   "Browser access",
+   "the published site's address passes the browser check, including Chrome's private network question; any other site is not allowed"
+  ]
+ ],
+ "bugs": [
+  [
+   "The published website would have been refused by the server in Chrome.",
+   "Chrome asks a special question before an internet page may talk to a server on your own PC; the web framework refuses it unless told otherwise, and my own extra header came too late.",
+   "Found by the automated preflight check; switched on the framework's own private network setting and added the check to the test."
+  ]
+ ]
+}
