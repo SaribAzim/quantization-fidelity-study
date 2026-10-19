@@ -13,8 +13,8 @@ so choosing what to protect cannot leak into the reported results.
   * per-type:  one kind of table (q, k, v, o, gate, up, down) at 8-bit in four
                spread-out layers (7 trials), to see which KIND matters most
 
-Run from the project root:   python quantization/mixed_sensitivity.py
-Output: results/mixed/sensitivity.json
+Run from the project root:   python quantization/mixed_sensitivity.py [packed model folder] [suffix]
+Output: results/mixed/sensitivity<suffix>.json
 """
 
 import json
@@ -35,7 +35,6 @@ from quantization.run_gptq import CheckpointReader
 TYPES = ["self_attn.q_proj", "self_attn.k_proj", "self_attn.v_proj", "self_attn.o_proj",
          "mlp.gate_proj", "mlp.up_proj", "mlp.down_proj"]
 TYPE_TEST_LAYERS = [4, 12, 20, 28]  # four spread-out layers for the per-type trials
-REFERENCE = "results/mixed/ref_all4bit_validation.pt"
 
 
 def swap_to_8bit(model, reader, module_names):
@@ -61,6 +60,8 @@ def restore(model, saved):
 
 def main():
     folder = sys.argv[1] if len(sys.argv) > 1 else "quantized_models/packed_naive_4bit"
+    suffix = sys.argv[2] if len(sys.argv) > 2 else ""  # e.g. "_g128" keeps a second model's results separate
+    REFERENCE = f"results/mixed/ref_all4bit_validation{suffix}.pt"
     model, tokenizer = load_packed_model(folder)
     reader = CheckpointReader(find_cached_snapshot())
     os.makedirs("results/mixed", exist_ok=True)
@@ -83,8 +84,8 @@ def main():
     for t in TYPES:
         out["per_type"][t] = trial([f"model.layers.{l}.{t}" for l in TYPE_TEST_LAYERS])
         print(f"type {t:18s}: KL {out['per_type'][t]['kl_change']:.4f}", flush=True)
-    json.dump(out, open("results/mixed/sensitivity.json", "w"), indent=1)
-    print("Saved results/mixed/sensitivity.json")
+    json.dump(out, open(f"results/mixed/sensitivity{suffix}.json", "w"), indent=1)
+    print(f"Saved results/mixed/sensitivity{suffix}.json")
 
 
 if __name__ == "__main__":

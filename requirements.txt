@@ -1,16 +1,25 @@
 # Core deep learning
 torch>=2.3.0
- 
+
 # Model loading and running Llama 3.1 from Hugging Face
 transformers>=4.43.0
 accelerate>=0.30.0
- 
-# Quantization libraries (used later for comparison against our own implementation)
+
+# Quantization libraries (bitsandbytes is installed for comparison; the project's own quantization,
+# GPTQ and packed 4-bit storage are written from scratch in quantization/)
 bitsandbytes>=0.43.0
- 
+
 # Evaluation: perplexity needs raw text datasets, MMLU-style tasks need structured datasets
 datasets>=2.19.0
- 
+lm_eval>=0.4.0
+
+# Retrieval (RAG / HyDE) downloads Wikipedia text through its public web interface
+requests>=2.31.0
+
+# Figures and the PDF reports (all generated from results/*.json)
+matplotlib>=3.8.0
+reportlab>=4.0.0
+Pillow>=10.0.0
+
 # Utility: progress bars for long-running eval loops
 tqdm>=4.66.0
- 

@@ -10,8 +10,8 @@ both candidate layouts the SAME extra-size budget, so the comparison is fair:
                and so on; if a kind does not fit entirely, it is upgraded only
                in the most sensitive layers until the budget is used up
 
-Run:  python quantization/plan_mixed.py [extra GB budget]
-Writes results/mixed/plan_layers.json and results/mixed/plan_types.json
+Run:  python quantization/plan_mixed.py [extra GB budget] [suffix]
+Writes results/mixed/plan_layers<suffix>.json, plan_types<suffix>.json and plan_top3<suffix>.json
 """
 
 import json
@@ -32,7 +32,8 @@ def extra_gb(params):
 
 def main():
     budget = float(sys.argv[1]) if len(sys.argv) > 1 else 0.9
-    sens = json.load(open("results/mixed/sensitivity.json"))
+    suffix = sys.argv[2] if len(sys.argv) > 2 else ""
+    sens = json.load(open(f"results/mixed/sensitivity{suffix}.json"))
     layer_rank = sorted(range(32), key=lambda l: -sens["per_layer"][str(l)]["kl_change"])
     n_test = len(sens["type_test_layers"])
 
@@ -62,7 +63,7 @@ def main():
     for name, plan, cost, desc in [("layers", plan_layers, spent, f"layers {sorted(chosen_layers)}"),
                                    ("types", plan_types, spent_t, "; ".join(summary)),
                                    ("top3", plan_top3, 3 * per_layer_cost, f"layers {sorted(top3)}")]:
-        json.dump({"overrides": plan, "extra_gb": cost, "description": desc}, open(f"results/mixed/plan_{name}.json", "w"), indent=1)
+        json.dump({"overrides": plan, "extra_gb": cost, "description": desc}, open(f"results/mixed/plan_{name}{suffix}.json", "w"), indent=1)
         print(f"plan '{name}': {len(plan)} tables at 8-bit, +{cost:.2f} GB  ({desc})")
 
 
