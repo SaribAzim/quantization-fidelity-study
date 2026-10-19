@@ -108,7 +108,7 @@ FIDELITY_TOP_K = 256
 
 
 def evaluate_perplexity_and_fidelity(
-    model, tokenizer, reference_path, save_reference=False, num_samples=50, stride=512
+    model, tokenizer, reference_path, save_reference=False, num_samples=50, stride=512, split="test"
 ):
     """
     One pass over the SAME WikiText-2 slice and windows as evaluate_perplexity,
@@ -139,7 +139,10 @@ def evaluate_perplexity_and_fidelity(
     """
     import os
 
-    dataset = load_dataset("Salesforce/wikitext", "wikitext-2-raw-v1", split="test")
+    # `split` is "test" for every reported result. Choosing which layers to
+    # protect (mixed precision) uses "validation" instead, so those choices
+    # never touch the text the results are reported on.
+    dataset = load_dataset("Salesforce/wikitext", "wikitext-2-raw-v1", split=split)
     texts = [t for t in dataset["text"] if t.strip() != ""][:num_samples]
     full_text = "\n\n".join(texts)
     input_ids = tokenizer(full_text, return_tensors="pt").input_ids.to(model.device)

@@ -34,3 +34,7 @@ rag/data/
 # model folders (packed, fake-quantized, adapters) are large and regenerable
 quantized_models/
 
+
+# regenerable reference predictions used for sensitivity tests
+results/mixed/*.pt
+

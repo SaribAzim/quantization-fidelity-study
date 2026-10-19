@@ -29,20 +29,25 @@ from quantization.packed import pack_integers
 from quantization.quantize_checkpoint import SIDECAR_FILES, find_cached_snapshot, is_quantizable
 
 
-def pack_shard(src_path, dst_path, bits, group_size, device):
-    """Writes one packed shard. Returns the new tensor names it contains."""
+def pack_shard(src_path, dst_path, bits, group_size, device, overrides=None):
+    """
+    Writes one packed shard. Returns the new tensor names it contains.
+    `overrides` maps a layer name (e.g. "model.layers.5.mlp.down_proj") to a
+    different bit width: that is how mixed precision is built.
+    """
     out = {}
     with safe_open(src_path, framework="pt", device="cpu") as shard:
         for name in shard.keys():
             tensor = shard.get_tensor(name)
             if is_quantizable(name):
+                stem = name[:-len(".weight")]
+                bits_here = (overrides or {}).get(stem, bits)
                 weight = tensor.to(device=device, dtype=torch.float32)
                 if group_size == -1:
-                    q, scales, zeros = quantize_tensor_to_integers(weight, bits)
+                    q, scales, zeros = quantize_tensor_to_integers(weight, bits_here)
                 else:
-                    q, scales, zeros = quantize_tensor_to_integers_grouped(weight, bits, group_size)
-                stem = name[:-len(".weight")]
-                out[f"{stem}.qweight"] = pack_integers(q, bits).cpu().contiguous()
+                    q, scales, zeros = quantize_tensor_to_integers_grouped(weight, bits_here, group_size)
+                out[f"{stem}.qweight"] = pack_integers(q, bits_here).cpu().contiguous()
                 out[f"{stem}.scales"] = scales.reshape(weight.size(0), -1).cpu().contiguous()
                 out[f"{stem}.zeros"] = zeros.reshape(weight.size(0), -1).cpu().contiguous()
             else:
@@ -56,8 +61,10 @@ def main():
     parser.add_argument("--bits", type=int, default=4, choices=[4, 8])
     parser.add_argument("--group-size", type=int, default=-1)
     parser.add_argument("--out", default=None)
+    parser.add_argument("--plan", default=None, help="mixed-precision plan JSON from plan_mixed.py: {'overrides': {layer name: bits}}")
     args = parser.parse_args()
 
+    overrides = json.load(open(args.plan))["overrides"] if args.plan else {}
     src_dir = find_cached_snapshot()
     suffix = "" if args.group_size == -1 else f"_g{args.group_size}"
     out_dir = args.out or f"quantized_models/packed_naive_{args.bits}bit{suffix}"
@@ -69,11 +76,12 @@ def main():
     for i, shard in enumerate(shards):
         new_name = f"packed-{i + 1:05d}-of-{len(shards):05d}.safetensors"
         print(f"Packing {shard} -> {new_name}", flush=True)
-        for key in pack_shard(os.path.join(src_dir, shard), os.path.join(out_dir, new_name), args.bits, args.group_size, device):
+        for key in pack_shard(os.path.join(src_dir, shard), os.path.join(out_dir, new_name), args.bits, args.group_size, device, overrides):
             weight_map[key] = new_name
 
     json.dump({"metadata": {}, "weight_map": weight_map}, open(os.path.join(out_dir, "model.safetensors.index.json"), "w"))
-    json.dump({"method": "naive_rtn", "bits": args.bits, "group_size": args.group_size, "overrides": {}},
+    json.dump({"method": "naive_rtn", "bits": args.bits, "group_size": args.group_size,
+               "overrides": {name: [b, args.group_size] for name, b in overrides.items()}},
               open(os.path.join(out_dir, "packed_config.json"), "w"), indent=2)
     for side_file in SIDECAR_FILES:
         src = os.path.join(src_dir, side_file)
