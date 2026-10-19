@@ -229,6 +229,82 @@ def gptq_window():
     finish(fig, "gptq_window")
 
 
+SCORE_ROWS = ["Original (16-bit)", "Naive 8-bit", "Naive 4-bit, per row", "Per row + QLoRA", "Per row + 8-bit v,k,o,down",
+              "Naive 4-bit, g128", "g128 + 8-bit L0,1,31", "GPTQ g128 (cal 512)"]
+
+
+def scoreboard(data):
+    """A compact table as a picture: each metric column is shaded from light (worse) to blue (better); the best value is bold."""
+    from matplotlib.colors import to_rgb
+    rows_ = [d for d in data if d[1] in SCORE_ROWS]
+    columns = [  # title, value function, format, which direction is better (None = not shaded)
+        ("Size (GB)", lambda r: size_gb(r), "{:.2f}", None),
+        ("Perplexity", lambda r: r["perplexity"], "{:.2f}", "low"),
+        ("KL from original", lambda r: r.get("kl_divergence") or 0.0, "{:.3f}", "low"),
+        ("Same top word", lambda r: 1.0 if r.get("top1_agreement") is None else r["top1_agreement"], "{:.1%}", "high"),
+        ("CS exam", lambda r: r["mmlu_extended_cs"]["accuracy"], "{:.1%}", "high"),
+    ]
+    n, light, deep = len(rows_), to_rgb("#f2f5f9"), to_rgb("#8ab6ec")
+    fig, ax = plt.subplots(figsize=(9.6, 0.43 * (n + 2.1)))
+    ax.set_xlim(0, 9.6); ax.set_ylim(n + 1.25, -0.2); ax.axis("off")
+    x0, widths = 2.75, [1.1, 1.3, 1.65, 1.5, 1.2]
+    xs = [x0 + sum(widths[:i]) for i in range(len(widths))]
+    for (title, *_), x, w in zip(columns, xs, widths):
+        ax.text(x + w / 2, 0.15, title, ha="center", va="center", fontsize=8.6, color=INK2, fontweight="bold")
+    ax.plot([0, 9.6], [0.55, 0.55], color="#cfcec8", lw=0.9)
+    for ci, (title, fn, fmt, better) in enumerate(columns):
+        vals = [fn(d[3]) for d in rows_]
+        lo, hi = min(vals), max(vals)
+        best = (min(vals) if better == "low" else max(vals)) if better else None
+        for ri, (d, v) in enumerate(zip(rows_, vals)):
+            y = ri + 1.1
+            if better:
+                s = (v - lo) / (hi - lo) if hi > lo else 0.5
+                s = 1 - s if better == "low" else s
+                face = tuple(light[k] + (deep[k] - light[k]) * s for k in range(3))
+                ax.add_patch(plt.Rectangle((xs[ci] + 0.04, y - 0.4), widths[ci] - 0.08, 0.8, color=face, lw=0))
+            text = fmt.format(v)
+            if title == "KL from original" and d[3].get("kl_divergence") is None:
+                text = "-"
+            if title == "Size (GB)" and "packed_size_gb_estimate" in d[3]:
+                text += "*"
+            if title == "Perplexity" and d[1] == "Per row + QLoRA":
+                text += "†"  # below the original's: the adapters learned the text's style (see footnote)
+            ax.text(xs[ci] + widths[ci] / 2, y, text, ha="center", va="center", fontsize=8.8, color=INK,
+                    fontweight="bold" if (better and v == best) else "normal")
+    for ri, d in enumerate(rows_):
+        ax.text(0.05, ri + 1.1, d[1], ha="left", va="center", fontsize=8.8, color=INK)
+        if ri < n - 1:
+            ax.plot([0, 9.6], [ri + 1.5, ri + 1.5], color="#ececE8", lw=0.6)
+    ax.text(0.05, n + 0.62, "* size when packed (estimate); other sizes are measured.   Shading: darker blue = better within each column; bold = best.",
+            fontsize=7.4, color=INK2, va="center")
+    ax.text(0.05, n + 0.95, "† lower than the original's perplexity: QLoRA learned the training text's style, and moved further from the original (KL).",
+            fontsize=7.4, color=INK2, va="center")
+    finish(fig, "scoreboard")
+
+
+def pipeline():
+    """A minimal diagram of the study's pipeline."""
+    from matplotlib.patches import FancyBboxPatch
+    stages = [("Original model", "Llama 3.1 8B Instruct\n16-bit, 15 GB", "#2a78d6"),
+              ("Quantize", "round to nearest\n(per row, g128) or GPTQ", "#1baf7a"),
+              ("Pack to 4-bit", "5.2 to 6.1 GB, fully\non an 8 GB GPU", "#eda100"),
+              ("Repair", "mixed precision, QLoRA,\nRAG and HyDE", "#6250d6"),
+              ("Measure", "perplexity, KL, same top\nword, CS exam", "#eb6834")]
+    fig, ax = plt.subplots(figsize=(9.6, 1.75))
+    ax.set_xlim(0, 9.6); ax.set_ylim(0, 1.75); ax.axis("off")
+    w, gap = 1.62, 0.3
+    for i, (head, sub, color) in enumerate(stages):
+        x = 0.3 + i * (w + gap)
+        ax.add_patch(FancyBboxPatch((x, 0.2), w, 1.3, boxstyle="round,pad=0,rounding_size=0.06", fc="white", ec="#d3d2cb", lw=1.0))
+        ax.add_patch(plt.Rectangle((x + 0.06, 1.4), w - 0.12, 0.05, color=color, lw=0))
+        ax.text(x + w / 2, 1.15, head, ha="center", va="center", fontsize=9.4, fontweight="bold", color=INK)
+        ax.text(x + w / 2, 0.68, sub, ha="center", va="center", fontsize=7.0, color=INK2, linespacing=1.5)
+        if i < len(stages) - 1:
+            ax.annotate("", xy=(x + w + gap - 0.03, 0.85), xytext=(x + w + 0.03, 0.85), arrowprops=dict(arrowstyle="->", color="#9a9992", lw=1.0))
+    finish(fig, "pipeline")
+
+
 def summary_table(data):
     lines = ["# Results summary", "", "Generated by `evaluation/plot_results.py` from `results/*.json`. Exam = 412 CS MMLU questions "
              "(uncertainty about plus or minus 2.5 points). Size is the real size for packed models and the packed-size estimate for fake-quantized ones.", "",
@@ -249,5 +325,7 @@ if __name__ == "__main__":
     rag()
     qlora()
     gptq_window()
+    scoreboard(data)
+    pipeline()
     summary_table(data)
     print(f"{len(data)} models plotted; figures in {FIG_DIR}/, table in results/summary.md")
