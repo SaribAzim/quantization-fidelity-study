@@ -305,6 +305,81 @@ def pipeline():
     finish(fig, "pipeline")
 
 
+def hero():
+    """Banner for the top of the README: the title and the one picture that matters (model size against the 8 GB GPU)."""
+    from matplotlib.patches import FancyBboxPatch
+    orig, best = load("baseline"), load("packed_g128_mixed_top3")
+    if not (orig and best):
+        return
+    navy, soft, faint = "#0f1b2d", "#b8c4d6", "#7f90aa"
+    fig = plt.figure(figsize=(12, 3.3), facecolor=navy)
+    ax = fig.add_axes([0, 0, 1, 1]); ax.set_xlim(0, 12); ax.set_ylim(0, 3.3); ax.axis("off")
+    ax.add_patch(plt.Rectangle((0, 3.22), 12, 0.08, color="#3987e5", lw=0))
+    ax.text(0.55, 2.3, "Quantization Fidelity Study", color="white", fontsize=29, fontweight="bold", va="center")
+    ax.text(0.55, 1.62, "How faithfully does a 4-bit Llama 3.1 8B copy the original,\nand what wins the lost quality back?",
+            color=soft, fontsize=12.5, va="center", linespacing=1.5)
+    ax.text(0.55, 0.6, "Rounding, GPTQ, packed 4-bit storage, mixed precision, RAG and QLoRA,\nbuilt from scratch and measured on one 8 GB GPU.",
+            color=faint, fontsize=9.6, va="center", linespacing=1.6)
+    x0, width = 7.0, 3.7
+    for y, label, gb, color in [(2.3, "Original, 16-bit", orig["model_size_gb"], "#5b6b84"), (1.3, "Best 4-bit model", best["model_size_gb"], "#3987e5")]:
+        ax.text(x0, y + 0.42, label, color=soft, fontsize=9.5, va="center")
+        ax.add_patch(FancyBboxPatch((x0, y - 0.17), width * gb / 15, 0.34, boxstyle="round,pad=0,rounding_size=0.08", fc=color, lw=0))
+        ax.text(x0 + width * gb / 15 + 0.12, y, f"{gb:.1f} GB", color="white", fontsize=11, fontweight="bold", va="center")
+    gpu_x = x0 + width * 8 / 15
+    ax.plot([gpu_x, gpu_x], [0.85, 2.75], color="#f0b429", lw=1.1, ls=(0, (4, 3)))
+    ax.text(gpu_x, 0.62, "8 GB GPU", color="#f0b429", fontsize=9, ha="center", va="center")
+    fig.savefig(f"{FIG_DIR}/hero.png", dpi=170, facecolor=navy); plt.close(fig)
+
+
+def kpis():
+    """Four headline numbers as cards."""
+    from matplotlib.patches import FancyBboxPatch
+    orig, rtn, best = load("baseline"), load("packed_naive_4bit"), load("packed_g128_mixed_top3")
+    if not (orig and rtn and best):
+        return
+    cards = [("MODEL SIZE", f"{orig['model_size_gb']:.1f} → {best['model_size_gb']:.1f} GB", f"{orig['model_size_gb'] / best['model_size_gb']:.1f}x smaller, fits an 8 GB GPU", "#2a78d6"),
+             ("CS EXAM", f"{orig['mmlu_extended_cs']['accuracy'] * 100:.1f}% → {best['mmlu_extended_cs']['accuracy'] * 100:.1f}%", "original to best 4-bit, within exam noise", "#1baf7a"),
+             ("DISTANCE FROM ORIGINAL", f"{rtn['kl_divergence']:.3f} → {best['kl_divergence']:.3f}", "KL, plain 4-bit to best 4-bit", "#6250d6"),
+             ("SAME NEXT WORD", f"{rtn['top1_agreement'] * 100:.1f}% → {best['top1_agreement'] * 100:.1f}%", "plain 4-bit to best 4-bit", "#eb6834")]
+    fig = plt.figure(figsize=(12, 1.75))
+    ax = fig.add_axes([0, 0, 1, 1]); ax.set_xlim(0, 12); ax.set_ylim(0, 1.75); ax.axis("off")
+    w, gap = 2.85, 0.2
+    for i, (label, big, sub, color) in enumerate(cards):
+        x = i * (w + gap)
+        ax.add_patch(FancyBboxPatch((x + 0.02, 0.1), w - 0.04, 1.55, boxstyle="round,pad=0,rounding_size=0.1", fc="white", ec="#d9d8d2", lw=1.1))
+        ax.add_patch(plt.Rectangle((x + 0.02, 0.1), 0.07, 1.55, color=color, lw=0))
+        ax.text(x + 0.3, 1.38, label, fontsize=7.6, color=INK2, fontweight="bold", va="center")
+        ax.text(x + 0.3, 0.88, big, fontsize=17, color=INK, fontweight="bold", va="center")
+        ax.text(x + 0.3, 0.38, sub, fontsize=7.8, color=INK2, va="center")
+    fig.savefig(f"{FIG_DIR}/kpis.png", dpi=170); plt.close(fig)
+
+
+def recovery():
+    """How much of the plain-4-bit loss each technique wins back, on two measures."""
+    orig, base = load("baseline"), load("packed_naive_4bit")
+    items = [("Groups of 128", "packed_naive_4bit_g128"), ("GPTQ g128 (cal 512)", "gptq_4bit_g128_cal512"),
+             ("Per row + 8-bit v,k,o,down", "packed_mixed_types"), ("g128 + 8-bit L0,1,31", "packed_g128_mixed_top3"),
+             ("g128 + 8-bit v,k,o,q", "packed_g128_mixed_types"), ("Per row + 8-bit L0,1,31", "packed_mixed_top3"),
+             ("GPTQ g128 (cal 2048)", "gptq_4bit_g128"), ("Per row + QLoRA", "qlora_naive_4bit")]
+    rows_ = [(label, load(name)) for label, name in items if load(name)]
+    if not (orig and base and rows_):
+        return
+    kl0, gap = base["kl_divergence"], orig["mmlu_extended_cs"]["accuracy"] - base["mmlu_extended_cs"]["accuracy"]
+    kl_rec = [(kl0 - r["kl_divergence"]) / kl0 * 100 for _, r in rows_]
+    ex_rec = [(r["mmlu_extended_cs"]["accuracy"] - base["mmlu_extended_cs"]["accuracy"]) / gap * 100 for _, r in rows_]
+    fig, ax = plt.subplots(1, 2, figsize=(9.6, 3.6), constrained_layout=True, sharey=True)
+    for a, vals, title in ((ax[0], kl_rec, "Fidelity recovered (reduction in KL)"), (ax[1], ex_rec, "Exam points recovered (share of the loss)")):
+        ys = list(range(len(rows_)))[::-1]
+        a.barh(ys, vals, color=["#1baf7a" if v >= 0 else "#e34948" for v in vals], height=0.62)
+        for y, v in zip(ys, vals):
+            a.text(v + 3 if v >= 0 else 3, y, f"{v:+.0f}%", va="center", ha="left", fontsize=8.5, color=INK)  # labels sit right of the bar end, or of zero for losses
+        a.axvline(0, color=INK2, lw=0.8); a.set_xlim(-105, 125)
+        a.set_title(title, fontsize=9, loc="left", color=INK); a.grid(axis="x", color=GRID, lw=0.6); a.set_axisbelow(True)
+        a.set_yticks(ys); a.set_yticklabels([label for label, _ in rows_])
+    fig.suptitle("Share of the plain 4-bit model's loss that each technique wins back (100% = fully recovered)", fontsize=9.5, color=INK2, x=0.01, ha="left")
+    finish(fig, "recovery")
+
+
 def summary_table(data):
     lines = ["# Results summary", "", "Generated by `evaluation/plot_results.py` from `results/*.json`. Exam = 412 CS MMLU questions "
              "(uncertainty about plus or minus 2.5 points). Size is the real size for packed models and the packed-size estimate for fake-quantized ones.", "",
@@ -327,5 +402,8 @@ if __name__ == "__main__":
     gptq_window()
     scoreboard(data)
     pipeline()
+    hero()
+    kpis()
+    recovery()
     summary_table(data)
     print(f"{len(data)} models plotted; figures in {FIG_DIR}/, table in results/summary.md")
