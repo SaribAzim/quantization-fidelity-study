@@ -87,6 +87,20 @@ QLoRA (`quantization/train_qlora.py`): frozen packed 4-bit model, 41.9 M trainab
 
 QLoRA fixed 47 exam answers and broke 55 (sign test p = 0.49): no recovery. Perplexity fell below the original model's because the adapters learned WikiText's style, while fidelity to the original (KL) got worse: next-word prediction on raw text is not the same objective as matching the original model. Distillation from the original model is the natural next experiment. Details in `progress4.pdf`.
 
+### Mixed precision (naive 4-bit, fragile parts kept at 8-bit)
+
+`quantization/mixed_sensitivity.py` swaps one group of layers at a time to 8-bit in the real packed 4-bit model and measures how much the output changes (WikiText *validation* text, so the choice cannot leak into reported results). Layers 0, 1 and 31 are by far the most sensitive; by kind of table, `down`, `up`, and (per number) `v` and `k`. `quantization/plan_mixed.py` builds layouts with equal extra budgets; `make_packed.py --plan` builds them as real packed models.
+
+| 4-bit model | Extra size | Total size | KL from original | Same top word | Perplexity | CS exam, 412 q |
+|---|---|---|---|---|---|---|
+| Original | - | 15 GB | - | 100% | 11.44 | 55.6% |
+| RTN 4-bit (packed) | - | 5.22 GB | 0.281 | 74.3% | 14.70 | 50.5% |
+| + layers 0, 1, 31 at 8-bit | +0.30 GB | 5.52 GB | 0.132 | 83.6% | 13.03 | 48.3% |
+| + 8 most sensitive layers at 8-bit | +0.81 GB | 6.03 GB | 0.101 | 84.4% | 12.67 | 49.5% |
+| **+ v, k, o everywhere and down in 19 layers at 8-bit** | +0.89 GB | 6.11 GB | **0.076** | **87.1%** | 12.28 | **54.9%** |
+
+The "types" layout recovers 4.4 of the 5.1 lost exam points (56 answers fixed, 38 broken vs the 4-bit baseline, p = 0.08) and matches the original on 3 of 4 subjects; protecting a few whole layers improved fidelity but not the exam. A finer ruler (groups of 128) reaches similar quality at a smaller size, so the two fixes could be combined (not yet tried). Details in `progress5.pdf`.
+
 Notes: the earlier partial-quantization numbers (only 70/225 layers) are kept in `results/archive/`. Fake-quantized models run with disk offload, so their tokens/sec are not comparable and are not a result. Run `python quantization/quantize_checkpoint.py --bits N` then `python quantization/evaluate_checkpoint.py ...` (see its docstring).
 
 ## Hardware
