@@ -1,0 +1,12 @@
+[
+  {"id": "hash_table", "topic": "Computer science", "prompt": "Explain what a hash table is and why lookups are usually fast. Answer in three sentences."},
+  {"id": "python_list", "topic": "Code reading", "prompt": "What does this Python code print, and why?\n\nx = [1, 2, 3]\ny = x\ny.append(4)\nprint(len(x))"},
+  {"id": "average_speed", "topic": "Reasoning", "prompt": "A train travels 180 km in 2 hours and then 120 km in 1 hour. What is its average speed for the whole trip? Show the working briefly."},
+  {"id": "prime_221", "topic": "Reasoning", "prompt": "Is 221 a prime number? Explain how you checked."},
+  {"id": "process_thread", "topic": "Computer science", "prompt": "What is the difference between a process and a thread? Keep it short."},
+  {"id": "binary", "topic": "Summary", "prompt": "In two sentences, why do computers use binary instead of decimal?"},
+  {"id": "overfitting", "topic": "Machine learning", "prompt": "In machine learning, what is overfitting and how can you reduce it? Keep it brief."},
+  {"id": "relativity", "topic": "Knowledge", "prompt": "Who proposed the theory of general relativity, and in which year was it published?"},
+  {"id": "invite", "topic": "Writing", "prompt": "Write a short, friendly message inviting a classmate to a study session on Saturday."},
+  {"id": "quantization", "topic": "Explanation", "prompt": "Explain in simple words what it means to quantize a neural network."}
+]

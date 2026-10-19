@@ -201,16 +201,34 @@ def qlora():
     finish(fig, "qlora")
 
 
-def gptq_window():
+WINDOW_RESULTS = "results/gptq_window.json"
+
+
+def load_window_results():
+    """
+    Perplexity by test-window length, {model folder: {window: perplexity}}, from quantization/chain_eval.py.
+    Parsed from logs/chain_eval_*.log when present (and saved to results/gptq_window.json, which is committed),
+    otherwise read from that saved file, since logs/ is not part of the repository.
+    """
     out = {}
-    for fn in os.listdir("logs"):
-        if fn.startswith("chain_eval_"):
-            raw = open(os.path.join("logs", fn), "rb").read()
-            text = raw.decode("utf-16", errors="ignore") if raw[:2] in (b"\xff\xfe", b"\xfe\xff") else raw.decode("utf-8-sig", errors="ignore")
-            for line in text.splitlines():
-                m = re.match(r"RESULT (\S+) window (\d+): perplexity ([\d.]+)", line)
-                if m:
-                    out.setdefault(m.group(1), {})[int(m.group(2))] = float(m.group(3))
+    if os.path.isdir("logs"):
+        for fn in os.listdir("logs"):
+            if fn.startswith("chain_eval_"):
+                raw = open(os.path.join("logs", fn), "rb").read()
+                text = raw.decode("utf-16", errors="ignore") if raw[:2] in (b"\xff\xfe", b"\xfe\xff") else raw.decode("utf-8-sig", errors="ignore")
+                for line in text.splitlines():
+                    m = re.match(r"RESULT (\S+) window (\d+): perplexity ([\d.]+)", line)
+                    if m:
+                        out.setdefault(m.group(1), {})[int(m.group(2))] = float(m.group(3))
+    if out:
+        json.dump(out, open(WINDOW_RESULTS, "w"), indent=1)
+    elif os.path.exists(WINDOW_RESULTS):
+        out = {k: {int(w): p for w, p in v.items()} for k, v in json.load(open(WINDOW_RESULTS)).items()}
+    return out
+
+
+def gptq_window():
+    out = load_window_results()
     keys = [("Original", "base"), ("Naive g128", "quantized_models/naive_4bit_g128"), ("GPTQ, calibrated\non 2048-token text", "quantized_models/gptq_4bit_g128"),
             ("GPTQ, calibrated\non 512-token text", "quantized_models/gptq_4bit_g128_cal512")]
     keys = [(n, k) for n, k in keys if k in out and 512 in out[k] and 2048 in out[k]]

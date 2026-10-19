@@ -1,0 +1,1045 @@
+{
+ "generated": "2026-10-20",
+ "facts": {
+  "model": "Llama 3.1 8B Instruct",
+  "gpu": "RTX 3060 Ti, 8 GB",
+  "examQuestions": 412,
+  "examNoise": 0.025,
+  "subjects": [
+   "High school computer science",
+   "College computer science",
+   "Computer security",
+   "Machine learning"
+  ],
+  "libraryPassages": 10751
+ },
+ "baselineId": "per_row",
+ "models": [
+  {
+   "id": "original",
+   "label": "Original 16 bit",
+   "family": "Original",
+   "runnable": false,
+   "gallery": true,
+   "featured": null,
+   "note": "The reference model. 15 GB, too large for the 8 GB GPU, so its answers are recorded and replayed.",
+   "metrics": {
+    "perplexity": 11.443,
+    "kl": null,
+    "top1": 1.0,
+    "exam50": 0.66,
+    "exam": 0.5558,
+    "examStderr": 0.0245,
+    "perSubject": {
+     "High school computer science": 0.61,
+     "College computer science": 0.41,
+     "Computer security": 0.74,
+     "Machine learning": 0.4732
+    },
+    "sizeGb": 14.96,
+    "sizeMeasured": true,
+    "peakVramGb": null,
+    "tokensPerSecond": null
+   },
+   "recovery": null
+  },
+  {
+   "id": "g128_l0131",
+   "label": "Groups of 128 + 8 bit layers 0, 1, 31",
+   "family": "Mixed precision",
+   "runnable": true,
+   "gallery": true,
+   "featured": "Closest to the original",
+   "note": "Finer rounding everywhere, with the three most fragile layers kept at 8 bit.",
+   "metrics": {
+    "perplexity": 12.086,
+    "kl": 0.0485,
+    "top1": 0.8984,
+    "exam50": 0.68,
+    "exam": 0.5413,
+    "examStderr": 0.0246,
+    "perSubject": {
+     "High school computer science": 0.59,
+     "College computer science": 0.42,
+     "Computer security": 0.74,
+     "Machine learning": 0.4286
+    },
+    "sizeGb": 5.92,
+    "sizeMeasured": true,
+    "peakVramGb": 6.62,
+    "tokensPerSecond": 1.61
+   },
+   "recovery": {
+    "kl": 0.8272,
+    "exam": 0.7151
+   }
+  },
+  {
+   "id": "per_row_vkod",
+   "label": "Per row + 8 bit v, k, o, down",
+   "family": "Mixed precision",
+   "runnable": true,
+   "gallery": true,
+   "featured": "Best exam score",
+   "note": "Plain rounding, with the most fragile kinds of weight table kept at 8 bit in every layer.",
+   "metrics": {
+    "perplexity": 12.281,
+    "kl": 0.0762,
+    "top1": 0.8707,
+    "exam50": 0.62,
+    "exam": 0.5485,
+    "examStderr": 0.0245,
+    "perSubject": {
+     "High school computer science": 0.58,
+     "College computer science": 0.41,
+     "Computer security": 0.74,
+     "Machine learning": 0.4732
+    },
+    "sizeGb": 6.11,
+    "sizeMeasured": true,
+    "peakVramGb": 6.78,
+    "tokensPerSecond": 1.35
+   },
+   "recovery": {
+    "kl": 0.7284,
+    "exam": 0.8566
+   }
+  },
+  {
+   "id": "g128",
+   "label": "Groups of 128",
+   "family": "Naive, groups of 128",
+   "runnable": true,
+   "gallery": true,
+   "featured": "Smallest strong model",
+   "note": "Every 128 neighbouring weights get their own rounding ruler.",
+   "metrics": {
+    "perplexity": 12.292,
+    "kl": 0.0849,
+    "top1": 0.8638,
+    "exam50": 0.64,
+    "exam": 0.5413,
+    "examStderr": 0.0246,
+    "perSubject": {
+     "High school computer science": 0.59,
+     "College computer science": 0.44,
+     "Computer security": 0.73,
+     "Machine learning": 0.4196
+    },
+    "sizeGb": 5.61,
+    "sizeMeasured": true,
+    "peakVramGb": 6.31,
+    "tokensPerSecond": 1.57
+   },
+   "recovery": {
+    "kl": 0.6974,
+    "exam": 0.7151
+   }
+  },
+  {
+   "id": "g128_vkoq",
+   "label": "Groups of 128 + 8 bit v, k, o, q",
+   "family": "Mixed precision",
+   "runnable": true,
+   "gallery": true,
+   "featured": null,
+   "note": "Finer rounding, with attention tables kept at 8 bit.",
+   "metrics": {
+    "perplexity": 12.073,
+    "kl": 0.064,
+    "top1": 0.8858,
+    "exam50": 0.68,
+    "exam": 0.5461,
+    "examStderr": 0.0246,
+    "perSubject": {
+     "High school computer science": 0.59,
+     "College computer science": 0.42,
+     "Computer security": 0.73,
+     "Machine learning": 0.4554
+    },
+    "sizeGb": 6.11,
+    "sizeMeasured": true,
+    "peakVramGb": 6.79,
+    "tokensPerSecond": 1.63
+   },
+   "recovery": {
+    "kl": 0.7719,
+    "exam": 0.8094
+   }
+  },
+  {
+   "id": "per_row",
+   "label": "Plain 4 bit, one ruler per row",
+   "family": "Naive, one ruler per row",
+   "runnable": true,
+   "gallery": true,
+   "featured": null,
+   "note": "The simplest rounding. Shows the damage the other methods repair.",
+   "metrics": {
+    "perplexity": 14.702,
+    "kl": 0.2806,
+    "top1": 0.7426,
+    "exam50": 0.58,
+    "exam": 0.5049,
+    "examStderr": 0.0247,
+    "perSubject": {
+     "High school computer science": 0.53,
+     "College computer science": 0.39,
+     "Computer security": 0.71,
+     "Machine learning": 0.4018
+    },
+    "sizeGb": 5.22,
+    "sizeMeasured": true,
+    "peakVramGb": 5.89,
+    "tokensPerSecond": 1.55
+   },
+   "recovery": null
+  },
+  {
+   "id": "qlora",
+   "label": "Plain 4 bit + QLoRA",
+   "family": "QLoRA",
+   "runnable": true,
+   "gallery": true,
+   "featured": null,
+   "note": "Small trained adapters on top of plain 4 bit. Better at predicting text, further from the original.",
+   "metrics": {
+    "perplexity": 9.634,
+    "kl": 0.4452,
+    "top1": 0.7727,
+    "exam50": 0.58,
+    "exam": 0.4854,
+    "examStderr": 0.0247,
+    "perSubject": {
+     "High school computer science": 0.56,
+     "College computer science": 0.35,
+     "Computer security": 0.71,
+     "Machine learning": 0.3393
+    },
+    "sizeGb": 5.37,
+    "sizeMeasured": true,
+    "peakVramGb": 6.05,
+    "tokensPerSecond": 1.52
+   },
+   "recovery": {
+    "kl": -0.5866,
+    "exam": -0.3831
+   }
+  },
+  {
+   "id": "naive_8bit",
+   "label": "Naive 8 bit",
+   "family": "8 bit",
+   "runnable": false,
+   "gallery": false,
+   "featured": null,
+   "note": "Almost lossless, but about 8.5 GB packed: just too large for the 8 GB GPU.",
+   "metrics": {
+    "perplexity": 11.463,
+    "kl": 0.0016,
+    "top1": 0.9785,
+    "exam50": 0.66,
+    "exam": 0.5583,
+    "examStderr": 0.0245,
+    "perSubject": {
+     "High school computer science": 0.61,
+     "College computer science": 0.4,
+     "Computer security": 0.74,
+     "Machine learning": 0.4911
+    },
+    "sizeGb": 8.46,
+    "sizeMeasured": false,
+    "peakVramGb": null,
+    "tokensPerSecond": null
+   },
+   "recovery": {
+    "kl": 0.9943,
+    "exam": 1.0491
+   }
+  },
+  {
+   "id": "per_row_l0131",
+   "label": "Per row + 8 bit layers 0, 1, 31",
+   "family": "Mixed precision",
+   "runnable": false,
+   "gallery": false,
+   "featured": null,
+   "note": "Protecting three layers improves fidelity but not the exam.",
+   "metrics": {
+    "perplexity": 13.028,
+    "kl": 0.1317,
+    "top1": 0.8358,
+    "exam50": 0.54,
+    "exam": 0.483,
+    "examStderr": 0.0246,
+    "perSubject": {
+     "High school computer science": 0.48,
+     "College computer science": 0.36,
+     "Computer security": 0.68,
+     "Machine learning": 0.4196
+    },
+    "sizeGb": 5.52,
+    "sizeMeasured": true,
+    "peakVramGb": 6.19,
+    "tokensPerSecond": 1.29
+   },
+   "recovery": {
+    "kl": 0.5306,
+    "exam": -0.4303
+   }
+  },
+  {
+   "id": "per_row_8layers",
+   "label": "Per row + 8 bit for 8 layers",
+   "family": "Mixed precision",
+   "runnable": false,
+   "gallery": false,
+   "featured": null,
+   "note": "Protecting eight whole layers improves fidelity but not the exam.",
+   "metrics": {
+    "perplexity": 12.671,
+    "kl": 0.1008,
+    "top1": 0.8439,
+    "exam50": 0.6,
+    "exam": 0.4951,
+    "examStderr": 0.0247,
+    "perSubject": {
+     "High school computer science": 0.54,
+     "College computer science": 0.35,
+     "Computer security": 0.66,
+     "Machine learning": 0.4375
+    },
+    "sizeGb": 6.03,
+    "sizeMeasured": true,
+    "peakVramGb": 6.7,
+    "tokensPerSecond": 1.34
+   },
+   "recovery": {
+    "kl": 0.6408,
+    "exam": -0.1925
+   }
+  },
+  {
+   "id": "gptq_512",
+   "label": "GPTQ, groups of 128",
+   "family": "GPTQ",
+   "runnable": false,
+   "gallery": false,
+   "featured": null,
+   "note": "Calibrated rounding, written from scratch, calibrated on 512 token text.",
+   "metrics": {
+    "perplexity": 12.721,
+    "kl": 0.0997,
+    "top1": 0.8843,
+    "exam50": 0.66,
+    "exam": 0.5461,
+    "examStderr": 0.0246,
+    "perSubject": {
+     "High school computer science": 0.59,
+     "College computer science": 0.4,
+     "Computer security": 0.75,
+     "Machine learning": 0.4554
+    },
+    "sizeGb": 5.33,
+    "sizeMeasured": false,
+    "peakVramGb": null,
+    "tokensPerSecond": null
+   },
+   "recovery": {
+    "kl": 0.6447,
+    "exam": 0.8094
+   }
+  },
+  {
+   "id": "gptq_2048",
+   "label": "GPTQ, long calibration text",
+   "family": "GPTQ",
+   "runnable": false,
+   "gallery": false,
+   "featured": null,
+   "note": "The same method calibrated on 2048 token text: it fails on shorter text.",
+   "metrics": {
+    "perplexity": 19.451,
+    "kl": 0.5433,
+    "top1": 0.8033,
+    "exam50": 0.64,
+    "exam": 0.534,
+    "examStderr": 0.0246,
+    "perSubject": {
+     "High school computer science": 0.57,
+     "College computer science": 0.37,
+     "Computer security": 0.74,
+     "Machine learning": 0.4643
+    },
+    "sizeGb": 5.33,
+    "sizeMeasured": false,
+    "peakVramGb": null,
+    "tokensPerSecond": null
+   },
+   "recovery": {
+    "kl": -0.9362,
+    "exam": 0.5717
+   }
+  }
+ ],
+ "sensitivity": {
+  "perRow": {
+   "perLayer": [
+    0.01649,
+    0.05872,
+    0.0114,
+    0.01035,
+    0.01106,
+    0.00861,
+    0.00721,
+    0.00677,
+    0.00648,
+    0.00677,
+    0.00575,
+    0.00603,
+    0.00666,
+    0.00696,
+    0.00737,
+    0.00799,
+    0.00671,
+    0.00713,
+    0.00538,
+    0.00501,
+    0.00491,
+    0.0056,
+    0.00511,
+    0.00468,
+    0.00474,
+    0.00447,
+    0.00451,
+    0.00466,
+    0.00514,
+    0.00658,
+    0.00801,
+    0.07424
+   ],
+   "perKind": {
+    "q": 0.00196,
+    "k": 0.00166,
+    "v": 0.00386,
+    "o": 0.00369,
+    "gate": 0.00475,
+    "up": 0.00588,
+    "down": 0.00786
+   }
+  },
+  "groups128": {
+   "perLayer": [
+    0.00535,
+    0.01533,
+    0.00312,
+    0.00281,
+    0.00271,
+    0.0024,
+    0.00235,
+    0.00207,
+    0.00216,
+    0.00219,
+    0.002,
+    0.00216,
+    0.00207,
+    0.00228,
+    0.00247,
+    0.00243,
+    0.00242,
+    0.00232,
+    0.00218,
+    0.0021,
+    0.00213,
+    0.00225,
+    0.00233,
+    0.00211,
+    0.002,
+    0.00186,
+    0.00188,
+    0.00189,
+    0.00188,
+    0.00191,
+    0.00242,
+    0.00783
+   ],
+   "perKind": {
+    "q": 0.00093,
+    "k": 0.00081,
+    "v": 0.00166,
+    "o": 0.00136,
+    "gate": 0.00176,
+    "up": 0.00208,
+    "down": 0.00252
+   }
+  }
+ },
+ "rag": {
+  "none": {
+   "exam": 0.5121,
+   "stderr": 0.0247
+  },
+  "plain": {
+   "exam": 0.4927,
+   "stderr": 0.0247,
+   "fixed": 53,
+   "broken": 61,
+   "p": 0.512
+  },
+  "hyde": {
+   "exam": 0.5121,
+   "stderr": 0.0247,
+   "fixed": 53,
+   "broken": 53,
+   "p": 1.0
+  }
+ },
+ "qlora": {
+  "train": [
+   [
+    1,
+    2.6005
+   ],
+   [
+    2,
+    2.4397
+   ],
+   [
+    3,
+    2.7157
+   ],
+   [
+    4,
+    2.5364
+   ],
+   [
+    5,
+    2.4196
+   ],
+   [
+    6,
+    2.3441
+   ],
+   [
+    7,
+    2.089
+   ],
+   [
+    8,
+    2.3986
+   ],
+   [
+    9,
+    2.3378
+   ],
+   [
+    10,
+    2.3521
+   ],
+   [
+    11,
+    2.2345
+   ],
+   [
+    12,
+    2.1932
+   ],
+   [
+    13,
+    2.386
+   ],
+   [
+    14,
+    2.2891
+   ],
+   [
+    15,
+    2.3896
+   ],
+   [
+    16,
+    2.1437
+   ],
+   [
+    17,
+    2.2604
+   ],
+   [
+    18,
+    2.2799
+   ],
+   [
+    19,
+    2.1854
+   ],
+   [
+    20,
+    2.3092
+   ],
+   [
+    21,
+    2.1722
+   ],
+   [
+    22,
+    2.298
+   ],
+   [
+    23,
+    1.997
+   ],
+   [
+    24,
+    2.0444
+   ],
+   [
+    25,
+    2.3014
+   ],
+   [
+    26,
+    2.0577
+   ],
+   [
+    27,
+    2.2074
+   ],
+   [
+    28,
+    2.3293
+   ],
+   [
+    29,
+    2.1769
+   ],
+   [
+    30,
+    2.1702
+   ],
+   [
+    31,
+    2.2757
+   ],
+   [
+    32,
+    2.0582
+   ],
+   [
+    33,
+    2.1966
+   ],
+   [
+    34,
+    2.177
+   ],
+   [
+    35,
+    2.2539
+   ],
+   [
+    36,
+    2.099
+   ],
+   [
+    37,
+    1.9603
+   ],
+   [
+    38,
+    2.1663
+   ],
+   [
+    39,
+    2.0492
+   ],
+   [
+    40,
+    2.2642
+   ],
+   [
+    41,
+    2.1445
+   ],
+   [
+    42,
+    2.0288
+   ],
+   [
+    43,
+    2.0364
+   ],
+   [
+    44,
+    2.0966
+   ],
+   [
+    45,
+    2.0794
+   ],
+   [
+    46,
+    2.0782
+   ],
+   [
+    47,
+    2.1731
+   ],
+   [
+    48,
+    1.9867
+   ],
+   [
+    49,
+    2.2569
+   ],
+   [
+    50,
+    2.122
+   ],
+   [
+    51,
+    2.0281
+   ],
+   [
+    52,
+    2.1407
+   ],
+   [
+    53,
+    2.2547
+   ],
+   [
+    54,
+    2.3375
+   ],
+   [
+    55,
+    2.1116
+   ],
+   [
+    56,
+    2.2399
+   ],
+   [
+    57,
+    2.1276
+   ],
+   [
+    58,
+    2.1495
+   ],
+   [
+    59,
+    2.1425
+   ],
+   [
+    60,
+    2.1216
+   ],
+   [
+    61,
+    2.1375
+   ],
+   [
+    62,
+    2.1646
+   ],
+   [
+    63,
+    2.0147
+   ],
+   [
+    64,
+    2.0947
+   ],
+   [
+    65,
+    2.096
+   ],
+   [
+    66,
+    2.1209
+   ],
+   [
+    67,
+    2.2333
+   ],
+   [
+    68,
+    2.0851
+   ],
+   [
+    69,
+    1.9036
+   ],
+   [
+    70,
+    2.2302
+   ],
+   [
+    71,
+    2.2337
+   ],
+   [
+    72,
+    2.0704
+   ],
+   [
+    73,
+    2.0976
+   ],
+   [
+    74,
+    2.2303
+   ],
+   [
+    75,
+    2.1754
+   ],
+   [
+    76,
+    2.0469
+   ],
+   [
+    77,
+    2.1231
+   ],
+   [
+    78,
+    2.0898
+   ],
+   [
+    79,
+    2.2059
+   ],
+   [
+    80,
+    2.167
+   ],
+   [
+    81,
+    1.9679
+   ],
+   [
+    82,
+    2.2623
+   ],
+   [
+    83,
+    2.0082
+   ],
+   [
+    84,
+    2.0666
+   ],
+   [
+    85,
+    2.1973
+   ],
+   [
+    86,
+    2.1515
+   ],
+   [
+    87,
+    2.1307
+   ],
+   [
+    88,
+    2.0682
+   ],
+   [
+    89,
+    2.1861
+   ],
+   [
+    90,
+    1.9047
+   ],
+   [
+    91,
+    2.1331
+   ],
+   [
+    92,
+    2.1205
+   ],
+   [
+    93,
+    2.2534
+   ],
+   [
+    94,
+    2.1522
+   ],
+   [
+    95,
+    2.1228
+   ],
+   [
+    96,
+    2.1011
+   ],
+   [
+    97,
+    2.0117
+   ],
+   [
+    98,
+    2.0676
+   ],
+   [
+    99,
+    2.0709
+   ],
+   [
+    100,
+    2.2615
+   ],
+   [
+    101,
+    2.0954
+   ],
+   [
+    102,
+    2.1915
+   ],
+   [
+    103,
+    2.0705
+   ],
+   [
+    104,
+    2.0931
+   ],
+   [
+    105,
+    2.262
+   ],
+   [
+    106,
+    2.0847
+   ],
+   [
+    107,
+    2.0412
+   ],
+   [
+    108,
+    2.0216
+   ],
+   [
+    109,
+    2.2598
+   ],
+   [
+    110,
+    1.9507
+   ],
+   [
+    111,
+    2.2016
+   ],
+   [
+    112,
+    2.1739
+   ],
+   [
+    113,
+    1.9964
+   ],
+   [
+    114,
+    2.0075
+   ],
+   [
+    115,
+    2.0403
+   ],
+   [
+    116,
+    2.2448
+   ],
+   [
+    117,
+    2.1942
+   ],
+   [
+    118,
+    2.126
+   ],
+   [
+    119,
+    1.9585
+   ],
+   [
+    120,
+    2.1331
+   ],
+   [
+    121,
+    2.0876
+   ],
+   [
+    122,
+    2.1352
+   ]
+  ],
+  "validation": [
+   [
+    0,
+    2.321
+   ],
+   [
+    20,
+    1.9587
+   ],
+   [
+    40,
+    1.9153
+   ],
+   [
+    60,
+    1.9003
+   ],
+   [
+    80,
+    1.8944
+   ],
+   [
+    100,
+    1.8884
+   ],
+   [
+    120,
+    1.8854
+   ],
+   [
+    122,
+    1.8851
+   ]
+  ]
+ },
+ "gptqWindow": [
+  {
+   "label": "Original",
+   "short": 11.444,
+   "long": 8.053
+  },
+  {
+   "label": "GPTQ, 2048 token calibration",
+   "short": 19.46,
+   "long": 8.392
+  },
+  {
+   "label": "GPTQ, 512 token calibration",
+   "short": 12.728,
+   "long": 8.458
+  },
+  {
+   "label": "Groups of 128",
+   "short": 12.29,
+   "long": 8.601
+  }
+ ]
+}
