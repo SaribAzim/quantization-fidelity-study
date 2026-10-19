@@ -1,123 +1,174 @@
 # Quantization Fidelity Study
 
-**Research question:** How much does an 8B parameter LLM degrade when quantized, and can a RAG architecture recover the fidelity lost in a specific domain?
+How faithfully does a compressed Llama 3.1 8B Instruct reproduce the original model, and which techniques recover the quality that 4-bit quantization loses?
 
-## Model
+Llama 3.1 8B Instruct &nbsp;·&nbsp; RTX 3060 Ti (8 GB) &nbsp;·&nbsp; Python 3.11, PyTorch 2.14 &nbsp;·&nbsp; quantization, GPTQ and packed 4-bit storage implemented from scratch
 
-Llama 3.1 8B Instruct (Meta, via Hugging Face)
+<p align="center"><img src="results/figures/pipeline.png" alt="Pipeline: original model, quantize, pack to 4-bit, repair, measure" width="92%"></p>
 
-## Project structure
+## Summary
 
-```
-quantization/   - Our own PTQ and GPTQ-style quantization implementations
-evaluation/     - Evaluation harness (perplexity, task accuracy, latency, memory)
-rag/            - RAG pipeline built on the quantized model
-deployment/     - FastAPI service + Docker setup
-results/        - Logged metrics and comparison tables from every phase
-notebooks/      - Exploratory work, not the source of truth for final code
-```
+An 8B-parameter model in 16-bit needs 15 GB, which does not fit an 8 GB GPU. Rounding its weights to 4 bits shrinks it about three times, but costs quality. This project measures that cost against the original model, not just against a benchmark, and tests what wins it back. Every method is built and evaluated on one shared harness, on one machine, with free tools only.
 
-## Evaluation metrics
+- **Plain 4-bit rounding is lossy.** One setting per row of weights drops a computer-science exam from 55.6% to 50.5%, and the model picks a different next word than the original about one time in four.
+- **Two cheap changes recover most of it.** Rounding in groups of 128 numbers, or keeping the most fragile weight tables at 8-bit, brings the exam to 54 to 55%.
+- **The best combination** (groups of 128, plus 8-bit for layers 0, 1 and 31) is the closest 4-bit model to the original: KL divergence 0.048, same next word 89.8% of the time, 5.92 GB, fully on the GPU.
+- **Retrieval (RAG, HyDE) and QLoRA fine-tuning did not recover the loss.** Both are reported as negative results with their likely causes.
 
-Every phase (base model, naive-quantized, GPTQ-quantized, RAG-augmented) is measured on the same four metrics, so comparisons stay apples-to-apples:
+## Results at a glance
 
-- **Perplexity** — language modeling quality on held-out text (WikiText-2, our own implementation in `evaluate.py`)
-- **Task accuracy** — MMLU `high_school_computer_science` subtask, 0-shot, 50 samples, via `lm-evaluation-harness`:
-  ```
-  lm_eval --model hf --model_args pretrained=<model>,dtype=bfloat16,parallelize=True,offload_folder=offload --tasks mmlu_high_school_computer_science --apply_chat_template --limit 50
-  ```
-  (We initially hand-rolled this, but raw logit comparison proved too fragile for an instruction-tuned model's chat template and tokenizer quirks, `lm-eval` handles this correctly and is the standard tool for the job.)
-- **Latency** — tokens per second
-- **Memory footprint** — peak VRAM usage and model size on disk
+<p align="center"><img src="results/figures/scoreboard.png" alt="Scoreboard of key models across size, perplexity, KL, same top word and CS exam" width="100%"></p>
 
-## Status
+| Measure | What it tells you |
+|---|---|
+| **KL from original** | How far the model's whole prediction distribution is from the original's. 0 means identical. The most sensitive measure of fidelity. |
+| **Same top word** | How often the model's most likely next word equals the original's. |
+| **CS exam** | 412 computer-science multiple-choice questions (four MMLU subjects), 0-shot. Uncertainty is about ±2.5 points, so differences below that are not resolvable. |
+| **Perplexity** | Surprise on unseen WikiText-2 text. Lower is better, but it rewards training on similar text, so it is never read alone. |
 
-Project in progress. Phases 0-2 done (baseline, naive quantization of all 224 decoder Linear layers).
+<p align="center"><img src="results/figures/size_vs_quality.png" alt="Exam accuracy and KL against model size for all methods" width="100%"></p>
 
-### Phase 2 results (naive per-channel round-to-nearest, fake-quantized)
+## Findings
 
-| | Base BF16 | Naive 8-bit | Naive 4-bit |
-|---|---|---|---|
-| Perplexity (WikiText-2) | 11.443 | 11.463 | 14.709 |
-| KL divergence vs base | - | 0.0016 | 0.280 |
-| Top-1 agreement with base | - | 97.8% | 74.3% |
-| MMLU CS, first 50 q (stderr ~0.07) | 0.66 | 0.66 | 0.58 |
-| MMLU CS extended, 412 q (stderr ~0.025) | 0.556 | 0.558 | 0.512 |
-| Size if packed (GB, estimate) | 14.96 | 8.46 | 5.21 |
+1. **8-bit is essentially free; 4-bit is not.** Naive 8-bit scores 55.8% (original 55.6%) at KL 0.002. One-ruler-per-row 4-bit scores 50.5% at KL 0.281.
+2. **A finer rounding ruler is the cheapest fix.** Groups of 128 reach 54.1% and KL 0.085 for 5.61 GB (+0.4 GB over plain 4-bit).
+3. **Fragility is concentrated.** Swapping one group at a time to 8-bit shows layers 1, 31 and 0 matter most, and the `v`, `k`, `o` and `down` tables matter most by kind. Protecting those kinds in every layer lifts the per-row model from 50.5% to 54.9% (+0.9 GB); protecting a few whole layers improves fidelity but not the exam.
+4. **GPTQ is sensitive to its calibration text.** The from-scratch implementation matches groups-of-128 rounding on short text and beats it on long text, but calibrated on 2048-token text it collapses on 512-token test windows (perplexity 19.5 against 12.3).
+5. **Retrieval did not help.** Over 10,751 Wikipedia passages, plain RAG scored 49.3% and HyDE 51.2% against 51.2% without retrieval: as many answers were broken as were fixed.
+6. **Training toward the wrong target backfires.** QLoRA lowered perplexity to 9.63, below the original's 11.44, but raised KL from 0.281 to 0.445 and the exam fell to 48.5%. It learned the training text's style, not the original model's behaviour.
 
-### Phase 3 results (GPTQ written from scratch, 4-bit, group size 128)
+## Methods
 
-`gptqmodel` does not build on this Windows setup, so GPTQ is implemented in `quantization/gptq.py` and run layer by layer (`quantization/run_gptq.py`, fits 8 GB VRAM). All models below use 4 bits.
+| Technique | What it does | Code |
+|---|---|---|
+| Round-to-nearest, per row and groups of 128 | Snaps each weight to the nearest of 16 (4-bit) or 256 (8-bit) levels; each row or group has its own scale and zero-point | `quantization/naive_ptq.py`, `quantize_checkpoint.py` |
+| Real packed storage | Stores two 4-bit integers per byte plus scales; unpacks each layer on use. Weights are bit-identical to the simulated version, 5.2 GB instead of 15 GB | `quantization/packed.py`, `make_packed.py` |
+| GPTQ | Rounds one column at a time and adjusts the remaining columns to cancel the error, using calibration text | `quantization/gptq.py`, `run_gptq.py` |
+| Mixed precision | Measures which layers and tables hurt most when rounded, keeps those at 8-bit under a fixed size budget | `quantization/mixed_sensitivity.py`, `plan_mixed.py` |
+| RAG and HyDE | Retrieves passages with a small embedding model; HyDE searches with a passage the model writes itself | `rag/` |
+| QLoRA | Trains 41.9 M adapter parameters on the frozen packed 4-bit model | `quantization/train_qlora.py` |
 
-| | Naive per-row | Naive g128 | GPTQ g128 (calibrated on 2048-token text) | GPTQ g128 (calibrated on 512-token text) |
-|---|---|---|---|---|
-| Perplexity, 512-token windows (base 11.443) | 14.709 | 12.291 | 19.451 | 12.721 |
-| KL divergence vs base | 0.280 | 0.085 | 0.543 | 0.100 |
-| Top-1 agreement with base | 74.3% | 86.5% | 80.3% | 88.4% |
-| MMLU CS, 412 q (base 0.556) | 0.512 | 0.546 | 0.534 | 0.546 |
-| Perplexity, 2048-token windows (base 8.053) | - | 8.601 | 8.392 | 8.458 |
+All models are measured by the same code (`evaluate.py`, `quantization/evaluate_checkpoint.py`). Models are produced layer by layer straight from the saved weight files, so the 15 GB original never has to fit in memory.
 
-Findings: group-wise rounding helps naive quantization a lot. GPTQ overfits to the window length of its calibration text (2048-token calibration collapses on 512-token test windows), so calibration text must match real use. After recalibrating on 512-token windows, GPTQ and naive g128 are about equal on short text (identical exam score) and GPTQ is better on long text. Diagnostics are in `quantization/diagnose_gptq*.py` and `quantization/chain_eval.py`.
+## Evaluation protocol
 
-### Phase 4 results (RAG and HyDE on the naive 4-bit per-row model)
+- **Identical inputs.** The same WikiText-2 text and the same 412 questions for every model; the original model's predictions are stored once and every other model is compared with that file.
+- **Separate text for choosing and reporting.** Decisions such as which layers to protect use WikiText *validation* text; every reported number uses the test text and the exam.
+- **Trusted scoring.** The retrieval-aware exam scorer reproduces the standard `lm-evaluation-harness` result question by question on 404 of 412 questions before any retrieval number is used.
+- **Contamination check.** Passages sharing an 8-word run with any exam question were removed from the retrieval library.
+- **Paired comparison.** Answers are compared question by question (fixed versus broken, sign test), not only as totals.
+- **Honest reporting.** Settings were fixed before looking at exam results, and failures are reported as they are.
 
-Library: 10,751 passages from about 780 Wikipedia computer-science articles (`rag/build_corpus.py`, contamination-checked against the exam), embedded with `BAAI/bge-small-en-v1.5` and searched by a plain matrix product (`rag/`). Same 412 CS exam questions, same naive 4-bit model, top-3 passages. The scorer (`rag/scorer.py`) matches lm-eval question by question on 404/412 questions with retrieval off.
+<details>
+<summary><b>Full results table</b></summary>
 
-| Naive 4-bit (per row), 412 questions | Accuracy | Fixed / broken vs no RAG | Sign test |
-|---|---|---|---|
-| Original model, no RAG (target) | 55.6% | - | - |
-| No RAG | 51.2% | - | - |
-| Plain RAG | 49.3% | 53 / 61 | p = 0.51 |
-| HyDE RAG | 51.2% | 53 / 53 | p = 1.00 |
-
-Neither retrieval mode recovered any of the 4.4-point loss on this exam. Reasons are discussed (untested) in `progress3.pdf`. Run: `python rag/run_rag_eval.py --model quantized_models/naive_4bit --name naive_quant_4bit --modes none hyde_gen plain hyde`.
-
-### Real 4-bit storage and QLoRA (naive 4-bit per row)
-
-`quantization/make_packed.py` stores the RTN 4-bit model as real packed integers (two per byte, plus per-row scale and zero-point) instead of 16-bit fake values: **5.22 GB instead of 14.96 GB**, fully on the 8 GB GPU (peak 5.89 GB). Unpacked weights are bit-identical to the fake-quantized ones (`test_packed.py`, plus a check on real layers), so results match the earlier model up to floating-point noise.
-
-QLoRA (`quantization/train_qlora.py`): frozen packed 4-bit model, 41.9 M trainable LoRA parameters (rank 16), trained on WikiText-2 train windows of 512 tokens, 1 M tokens, 74 minutes, peak 6.06 GB VRAM. Fixed settings chosen before looking at the exam.
-
-| | Original | RTN 4-bit (packed) | RTN 4-bit + QLoRA |
-|---|---|---|---|
-| Perplexity (WikiText-2) | 11.44 | 14.70 | **9.63** |
-| KL divergence from original | - | 0.281 | 0.445 |
-| Same top word as original | 100% | 74.3% | 77.3% |
-| CS exam, 412 questions | 55.6% | 50.5% | 48.5% |
-
-QLoRA fixed 47 exam answers and broke 55 (sign test p = 0.49): no recovery. Perplexity fell below the original model's because the adapters learned WikiText's style, while fidelity to the original (KL) got worse: next-word prediction on raw text is not the same objective as matching the original model. Distillation from the original model is the natural next experiment. Details in `progress4.pdf`.
-
-### Mixed precision (naive 4-bit, fragile parts kept at 8-bit)
-
-`quantization/mixed_sensitivity.py` swaps one group of layers at a time to 8-bit in the real packed 4-bit model and measures how much the output changes (WikiText *validation* text, so the choice cannot leak into reported results). Layers 0, 1 and 31 are by far the most sensitive; by kind of table, `down`, `up`, and (per number) `v` and `k`. `quantization/plan_mixed.py` builds layouts with equal extra budgets; `make_packed.py --plan` builds them as real packed models.
-
-| 4-bit model | Extra size | Total size | KL from original | Same top word | Perplexity | CS exam, 412 q |
+| Model | Perplexity | KL from original | Same top word | Exam (50 q) | Exam (412 q) | Size (GB) |
 |---|---|---|---|---|---|---|
-| Original | - | 15 GB | - | 100% | 11.44 | 55.6% |
-| RTN 4-bit (packed) | - | 5.22 GB | 0.281 | 74.3% | 14.70 | 50.5% |
-| + layers 0, 1, 31 at 8-bit | +0.30 GB | 5.52 GB | 0.132 | 83.6% | 13.03 | 48.3% |
-| + 8 most sensitive layers at 8-bit | +0.81 GB | 6.03 GB | 0.101 | 84.4% | 12.67 | 49.5% |
-| **+ v, k, o everywhere and down in 19 layers at 8-bit** | +0.89 GB | 6.11 GB | **0.076** | **87.1%** | 12.28 | **54.9%** |
+| Original (16-bit) | 11.44 | - | 100% | 66% | 55.6% | 14.96 |
+| Naive 8-bit | 11.46 | 0.002 | 97.8% | 66% | 55.8% | 8.46 * |
+| Naive 4-bit, per row | 14.70 | 0.281 | 74.3% | 58% | 50.5% | 5.22 |
+| Per row + QLoRA | 9.63 | 0.445 | 77.3% | 58% | 48.5% | 5.37 |
+| Per row + 8-bit layers 0, 1, 31 | 13.03 | 0.132 | 83.6% | 54% | 48.3% | 5.52 |
+| Per row + 8-bit 8 layers | 12.67 | 0.101 | 84.4% | 60% | 49.5% | 6.03 |
+| Per row + 8-bit v, k, o, down | 12.28 | 0.076 | 87.1% | 62% | 54.9% | 6.11 |
+| Naive 4-bit, groups of 128 | 12.29 | 0.085 | 86.4% | 64% | 54.1% | 5.61 |
+| g128 + 8-bit layers 0, 1, 31 | 12.09 | **0.048** | **89.8%** | 68% | 54.1% | 5.92 |
+| g128 + 8-bit v, k, o, q | 12.07 | 0.064 | 88.6% | 68% | 54.6% | 6.11 |
+| GPTQ g128 (calibrated on 512 tokens) | 12.72 | 0.100 | 88.4% | 66% | 54.6% | 5.33 * |
+| GPTQ g128 (calibrated on 2048 tokens) | 19.45 | 0.543 | 80.3% | 64% | 53.4% | 5.33 * |
 
-The "types" layout recovers 4.4 of the 5.1 lost exam points (56 answers fixed, 38 broken vs the 4-bit baseline, p = 0.08) and matches the original on 3 of 4 subjects; protecting a few whole layers improved fidelity but not the exam. A finer ruler (groups of 128) reaches similar quality at a smaller size, so the two fixes could be combined (not yet tried). Details in `progress5.pdf`.
+\* Estimated size when packed; all other sizes are measured on real packed models. The packed groups-of-128 format stores 32-bit scales, which is why it is larger than the compact estimate; a leaner format would be about 5.3 GB.
 
-### Groups of 128 combined with mixed precision (real packed models)
+Regenerate with `python evaluation/plot_results.py` (also writes `results/summary.md`).
 
-The sensitivity test was re-run on the packed groups-of-128 model (same layers matter most, but about 4x less: layer 1 changes the output by KL 0.015 instead of 0.059). `plan_mixed.py 0.5 _g128` builds layouts with a +0.5 GB budget.
+</details>
 
-| 4-bit model (all real packed) | Total size | KL from original | Same top word | Perplexity | CS exam, 412 q |
-|---|---|---|---|---|---|
-| Original | 15 GB | - | 100% | 11.44 | 55.6% |
-| Per row | 5.22 GB | 0.281 | 74.3% | 14.70 | 50.5% |
-| Per row + v, k, o, down at 8-bit | 6.11 GB | 0.076 | 87.1% | 12.28 | 54.9% |
-| Groups of 128 | 5.61 GB | 0.085 | 86.4% | 12.29 | 54.1% |
-| **Groups of 128 + layers 0, 1, 31 at 8-bit** | 5.92 GB | **0.048** | **89.8%** | 12.09 | 54.1% |
-| Groups of 128 + v, k, o (and half of q) at 8-bit | 6.11 GB | 0.064 | 88.6% | 12.07 | 54.6% |
+<details>
+<summary><b>Mixed precision: which parts are fragile</b></summary>
 
-The combination gives the best fidelity of any 4-bit model (KL 0.048), at a smaller size than the per-row mixed-precision model. The exam sits at its noise floor (about 2.5 points) for all of these, so it can no longer separate them. **Size note:** the packed groups-of-128 model is 5.61 GB, not the roughly 5.3 GB earlier estimated, because the packed format stores 32-bit scales and zero-points; a leaner format would be about 5.3 GB. `evaluation/plot_results.py` regenerates all figures (`results/figures/`) and `results/summary.md`; `evaluation/make_details_pdf.py` builds `details.pdf`.
+<p align="center"><img src="results/figures/sensitivity.png" alt="Per-layer and per-kind sensitivity to 4-bit rounding" width="100%"></p>
 
-Notes: the earlier partial-quantization numbers (only 70/225 layers) are kept in `results/archive/`. Fake-quantized models run with disk offload, so their tokens/sec are not comparable and are not a result. Run `python quantization/quantize_checkpoint.py --bits N` then `python quantization/evaluate_checkpoint.py ...` (see its docstring).
+Each trial upgrades one group to 8-bit and measures how much the output changes (KL). Layers 0, 1 and 31 dominate; on the finer groups-of-128 model the same layers stand out but about four times less (`results/figures/sensitivity_g128.png`).
 
-## Hardware
+</details>
 
-Developed and run on an RTX 3060 Ti (8GB VRAM), Ryzen 5 5600, 16GB RAM.
+<details>
+<summary><b>GPTQ and the calibration-length lesson</b></summary>
+
+<p align="center"><img src="results/figures/gptq_window.png" alt="Perplexity on short and long test windows for GPTQ calibrated on different lengths" width="100%"></p>
+
+Calibrated on 2048-token windows, GPTQ is excellent on 2048-token test windows and fails on 512-token ones. Recalibrating on matching text fixes it. Naive rounding never sees data, so it is unaffected.
+
+</details>
+
+<details>
+<summary><b>Retrieval (RAG and HyDE) on the 4-bit model</b></summary>
+
+<p align="center"><img src="results/figures/rag.png" alt="Accuracy with and without retrieval, and answers fixed versus broken" width="100%"></p>
+
+Retrieval repaired about 60% of the answers the damage had broken (36 of 60) but broke about 29% of previously correct ones. Several reasons are plausible and untested: the questions mostly test reasoning and code reading rather than recall, long retrieved context can distract a small damaged model, and a made-up HyDE passage mostly reflects what the model already knows.
+
+</details>
+
+<details>
+<summary><b>QLoRA on the 4-bit model</b></summary>
+
+<p align="center"><img src="results/figures/qlora.png" alt="QLoRA training loss and KL from the original" width="100%"></p>
+
+Training for next-word prediction on WikiText made the model better at WikiText and worse at being the original. Distillation toward the original model's predictions is the natural next experiment.
+
+</details>
+
+## Repository layout
+
+```
+quantization/   rounding, GPTQ, packed storage, mixed precision, QLoRA, evaluation entry points
+rag/            library builder, embedder, retriever, HyDE, exam scorer
+evaluation/     figures, summary table, report generator
+results/        every measurement (JSON), figures, per-question outcomes
+evaluate.py     shared metrics: perplexity, fidelity (KL, same top word), memory, latency
+test_*.py       unit tests for the rounding math, packed storage and GPTQ
+```
+
+## Reproducing
+
+Requires Python 3.11, an NVIDIA GPU with 8 GB, 16 GB RAM, about 60 GB free disk and access to the gated Llama 3.1 8B Instruct weights on Hugging Face.
+
+```bash
+python -m venv venv && venv\Scripts\activate      # PowerShell: .\venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+
+python test_packed.py && python test_gptq.py       # unit tests, no model needed
+
+# measure the original once; this also stores the prediction file other models are compared with
+python quantization/evaluate_checkpoint.py --model meta-llama/Llama-3.1-8B-Instruct --name baseline --method bf16 --save-reference
+
+# build and measure a real packed 4-bit model
+python quantization/make_packed.py --bits 4
+python quantization/evaluate_checkpoint.py --packed --model quantized_models/packed_naive_4bit --name packed_naive_4bit --method naive_rtn_packed --bits 4
+
+# mixed precision: measure sensitivity, plan layouts, build and evaluate one
+python quantization/mixed_sensitivity.py && python quantization/plan_mixed.py
+python quantization/make_packed.py --bits 4 --plan results/mixed/plan_types.json --out quantized_models/packed_mixed_types
+
+# retrieval and QLoRA
+python rag/build_corpus.py && python rag/build_index.py
+python rag/run_rag_eval.py --model quantized_models/naive_4bit --name naive_quant_4bit --modes none hyde_gen plain hyde
+python quantization/train_qlora.py --max-tokens 1000000
+
+python evaluation/plot_results.py                  # figures and results/summary.md
+```
+
+Evaluation of a packed model takes about ten minutes on the reference machine. Everything uses free tools and free hardware.
+
+## Limitations
+
+- One model, one domain (computer science) and a 412-question exam with about ±2.5 points of noise. The exam can no longer separate the best 4-bit models from each other or from the original; the fidelity measures (thousands of predictions) are the more sensitive evidence.
+- The headline mixed-precision exam gain has p = 0.08 on exam answers alone.
+- Fidelity is measured on WikiText text; behaviour on other text was not measured.
+- Generation is slow (about 1.5 tokens per second) because packed layers are unpacked in plain PyTorch; real 4-bit speed needs compiled kernels that could not be built on this Windows setup.
+- Not yet done: distillation-style QLoRA, the full 57-subject MMLU, comparison with GPTQModel and bitsandbytes, and a deployed demo.
+
+## Licensing and data
+
+Llama 3.1 is released by Meta under the Llama 3.1 Community License; this repository contains no model weights. Datasets: WikiText-2 (perplexity and calibration), MMLU (exam), and Wikipedia text under CC BY-SA for the retrieval library, which is downloaded locally and not redistributed here.
