@@ -31,11 +31,11 @@ import torch
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from deployment.catalog import CATALOG, ORIGINAL_REPO, by_id
+from deployment.generation import stream_answer
 
 PROMPTS = "deployment/prompts.json"
 CACHE_DIR = "results/gallery"
 OUT = "web/public/data/gallery.json"
-STOP_IDS = {128001, 128008, 128009}  # Llama 3.1 end of text, end of message and end of turn tokens
 
 
 def load(model_id):
@@ -52,29 +52,15 @@ def load(model_id):
     return model, tokenizer, time.time() - t0
 
 
-@torch.no_grad()
 def answer(model, tokenizer, prompt, max_new_tokens):
-    """Greedy decoding, one token at a time, recording when each token arrives."""
-    text = tokenizer.apply_chat_template([{"role": "user", "content": prompt}], tokenize=False, add_generation_prompt=True)
-    ids = tokenizer(text, return_tensors="pt", add_special_tokens=False).input_ids.to(model.device)
-    out_ids, pieces, times, past, current = [], [], [], None, ids
-    decoded = ""
-    start = time.time()
-    for _ in range(max_new_tokens):
-        out = model(input_ids=current, past_key_values=past, use_cache=True, logits_to_keep=1)
-        past = out.past_key_values
-        token = int(out.logits[0, -1].argmax())
-        if token in STOP_IDS:
-            break
+    """Greedy decoding, one token at a time (deployment/generation.py), recording when each token arrives."""
+    out_ids, pieces, times = [], [], []
+    for token, new_text, seconds in stream_answer(model, tokenizer, prompt, max_new_tokens):
         out_ids.append(token)
-        # Decode the whole answer so far and take the new part, so characters made of several tokens come out whole.
-        full = tokenizer.decode(out_ids, skip_special_tokens=True)
-        pieces.append(full[len(decoded):])
-        decoded = full
-        times.append(round(time.time() - start, 3))
-        current = torch.tensor([[token]], device=model.device)
+        pieces.append(new_text)
+        times.append(seconds)
     decode_s = times[-1] - times[0] if len(times) > 1 else 0.0
-    return {"text": decoded, "tokenIds": out_ids, "pieces": pieces, "times": times,
+    return {"text": "".join(pieces), "tokenIds": out_ids, "pieces": pieces, "times": times,
             "firstTokenS": times[0] if times else None,
             "tokensPerSecond": round((len(times) - 1) / decode_s, 3) if decode_s > 0 else None}
 
