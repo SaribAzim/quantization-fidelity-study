@@ -7,6 +7,6 @@ import App from './App'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    <App page={document.body.dataset.page === 'test' ? 'test' : 'project'} />
   </StrictMode>,
 )

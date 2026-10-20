@@ -1,7 +1,16 @@
 import { useEffect, useMemo, useRef } from 'react'
-import { cssVar, prefersReducedMotion, useColorScheme } from '../lib'
+import { cssVar, useColorScheme } from '../lib'
 
-type Props = { rows: number; cols: number; stages: number[][]; stage: number; label: string }
+type Props = {
+  rows: number
+  cols: number
+  stages: number[][]
+  /** 0 = first stage, 1 = second, 2 = third; fractions blend between them with a left to right sweep. */
+  position: number
+  /** 0 to 1: the grid develops in a diagonal wave when the page opens. */
+  intro: number
+  label: string
+}
 
 function hexToRgb(hex: string): [number, number, number] {
   const h = hex.replace('#', '')
@@ -9,17 +18,18 @@ function hexToRgb(hex: string): [number, number, number] {
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255]
 }
 
+const smooth = (p: number) => p * p * (3 - 2 * p)
+const clamp01 = (v: number) => Math.max(0, Math.min(1, v))
+
 /**
- * Draws real weights as tiles: blue for negative, teal for positive, paler near zero.
- * When the stage changes, tiles sweep from left to right into their rounded values,
- * so you can watch each row lose distinct colours.
+ * Draws real weights as tiles: ink blue for negative, mustard for positive, paler near zero.
+ * Between two stages each column switches a little after the one to its left,
+ * so a scroll sweeps the rounding across the grid and each row visibly loses colours.
  */
-export default function WeightGrid({ rows, cols, stages, stage, label }: Props) {
+export default function WeightGrid({ rows, cols, stages, position, intro, label }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
   const scheme = useColorScheme()
-  const shown = useRef<number[]>(stages[stage].slice())
-  const frame = useRef(0)
 
   // Clip the colour scale at the 98th percentile so a few extreme weights do not wash out the rest.
   const clip = useMemo(() => {
@@ -33,7 +43,7 @@ export default function WeightGrid({ rows, cols, stages, stage, label }: Props) 
     if (!canvas || !wrap) return
     const width = wrap.clientWidth
     const tileW = width / cols
-    const tileH = Math.max(4, tileW * 1.7)
+    const tileH = Math.max(4, tileW * 1.25)
     const height = Math.round(tileH * rows)
     const dpr = window.devicePixelRatio || 1
     if (canvas.width !== Math.round(width * dpr) || canvas.height !== Math.round(height * dpr)) {
@@ -43,65 +53,40 @@ export default function WeightGrid({ rows, cols, stages, stage, label }: Props) 
     }
     const ctx = canvas.getContext('2d')!
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
-    const paper = hexToRgb(cssVar('--paper') || '#ffffff')
-    const neg = hexToRgb(cssVar('--blue') || '#1f57d6')
-    const pos = hexToRgb(cssVar('--teal') || '#0f8c7e')
-    ctx.fillStyle = `rgb(${paper.join(',')})`
+    const surface = hexToRgb(cssVar('--surface') || '#fbf7ef')
+    const neg = hexToRgb(cssVar('--blue') || '#2c4a7a')
+    const pos = hexToRgb(cssVar('--amber') || '#c9962b')
+    ctx.fillStyle = `rgb(${surface.join(',')})`
     ctx.fillRect(0, 0, width, height)
     const gap = tileW > 4 ? 1 : 0
-    const values = shown.current
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < cols; c++) {
-        const v = values[r * cols + c]
+    const from = Math.min(stages.length - 2, Math.floor(position))
+    const f = position - from
+    const a = stages[from], b = stages[from + 1]
+    for (let c = 0; c < cols; c++) {
+      const sweep = smooth(clamp01(f * 1.6 - (c / cols) * 0.6))
+      for (let r = 0; r < rows; r++) {
+        const i = r * cols + c
+        const v = a[i] + (b[i] - a[i]) * sweep
         const t = Math.max(-1, Math.min(1, v / clip))
-        const m = Math.pow(Math.abs(t), 0.7)
+        const develop = smooth(clamp01(intro * 2.2 - ((r / rows) + (c / cols)) * 0.6))
+        const m = Math.pow(Math.abs(t), 0.7) * develop
         const target = t < 0 ? neg : pos
-        const rgb = paper.map((p, i) => Math.round(p + (target[i] - p) * m))
+        const rgb = surface.map((p, k) => Math.round(p + (target[k] - p) * m))
         ctx.fillStyle = `rgb(${rgb[0]},${rgb[1]},${rgb[2]})`
         ctx.fillRect(c * tileW, r * tileH, tileW - gap, tileH - gap)
       }
     }
   }
 
-  // Animate between stages: a left to right sweep, about one second.
-  useEffect(() => {
-    const from = shown.current.slice()
-    const to = stages[stage]
-    cancelAnimationFrame(frame.current)
-    if (prefersReducedMotion()) {
-      shown.current = to.slice()
-      draw()
-      return
-    }
-    const start = performance.now()
-    const total = 1100
-    const tick = (now: number) => {
-      const elapsed = now - start
-      const next = new Array(to.length)
-      for (let c = 0; c < cols; c++) {
-        const p = Math.max(0, Math.min(1, (elapsed - (c / cols) * total * 0.5) / (total * 0.5)))
-        const e = p * p * (3 - 2 * p)
-        for (let r = 0; r < rows; r++) {
-          const i = r * cols + c
-          next[i] = from[i] + (to[i] - from[i]) * e
-        }
-      }
-      shown.current = next
-      draw()
-      if (elapsed < total) frame.current = requestAnimationFrame(tick)
-    }
-    frame.current = requestAnimationFrame(tick)
-    return () => cancelAnimationFrame(frame.current)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stage, stages])
+  const drawRef = useRef(draw)
+  drawRef.current = draw
+  useEffect(() => { draw() })
 
   // Redraw on resize and when the colour scheme changes.
   useEffect(() => {
-    draw()
-    const ro = new ResizeObserver(() => draw())
+    const ro = new ResizeObserver(() => drawRef.current())
     if (wrapRef.current) ro.observe(wrapRef.current)
     return () => ro.disconnect()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scheme])
 
   return (

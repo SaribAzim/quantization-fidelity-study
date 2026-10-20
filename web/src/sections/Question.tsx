@@ -55,7 +55,7 @@ export default function Question() {
   const bestExam = modelById(results, 'per_row_vkod').metrics
   const oneIn = Math.round(1 / (1 - plain.top1))
   return (
-    <section className="section wrap" aria-labelledby="question-title">
+    <section id="study" className="section wrap" aria-labelledby="question-title">
       <div className="question-grid">
         <div className="section-head" style={{ marginBottom: 0 }}>
           <h2 id="question-title">How much does rounding cost, and what wins it back?</h2>

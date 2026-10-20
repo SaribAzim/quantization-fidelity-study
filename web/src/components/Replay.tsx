@@ -64,7 +64,7 @@ export function useTyping(text: string, runKey: number, charsPerSecond = 55) {
 }
 
 /** The visible part of an answer, with stretches that differ from the original highlighted. */
-function DiffText({ answer, count, showDiff }: { answer: Answer; count: number; showDiff: boolean }) {
+export function DiffText({ answer, count, showDiff }: { answer: Answer; count: number; showDiff: boolean }) {
   const visible = answer.pieces.slice(0, count).join('').length
   const out: ReactNode[] = []
   let used = 0

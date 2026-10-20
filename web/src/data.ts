@@ -106,9 +106,13 @@ export function modelById(results: Results, id: string): Model {
   return m
 }
 
-// The two best 4 bit models, which visitors can test, and the four models of the showcase.
-export const BEST_TWO = ['g128_l0131', 'per_row_vkod'] as const
-export const SHOWCASE = ['original', 'naive_8bit', 'g128_l0131', 'per_row_vkod'] as const
+// The best 4 bit model, which visitors can test, and the three models of the answer replays.
+export const BEST = 'g128_l0131'
+export const SHOWCASE = ['original', 'naive_8bit', BEST] as const
+
+// The two pages of the site.
+export const PROJECT_PAGE = base
+export const TEST_PAGE = `${base}test/`
 
 export const REPO = 'https://github.com/SaribAzim/quantization-fidelity-study'
 export const code = (path: string) => `${REPO}/blob/main/${path}`
@@ -118,8 +122,8 @@ export const FAMILY_COLOR: Record<string, string> = {
   Original: 'var(--blue)',
   '8 bit': 'var(--slate)',
   'Naive, one ruler per row': 'var(--ember)',
-  'Naive, groups of 128': 'var(--teal-soft)',
-  'Mixed precision': 'var(--teal)',
-  GPTQ: 'var(--violet)',
+  'Naive, groups of 128': 'var(--sage-soft)',
+  'Mixed precision': 'var(--sage)',
+  GPTQ: 'var(--plum)',
   QLoRA: 'var(--berry)',
 }

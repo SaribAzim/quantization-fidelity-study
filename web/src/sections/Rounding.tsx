@@ -44,10 +44,10 @@ function RulerFigure({ step }: { step: number }) {
         aria-label={`Forty real weights rounded to the nearest allowed value. Average rounding error ${num(errors[step], 4)}.`}>
         <text x={L} y={22}>Forty real weights from one row of layer 1</text>
         <text x={L} y={yRuler + 44}>Allowed values, with how many weights land on each</text>
-        <line x1={L} x2={W - R} y1={yRuler} y2={yRuler} stroke="var(--steel)" />
+        <line x1={L} x2={W - R} y1={yRuler} y2={yRuler} stroke="var(--muted)" />
         {visibleLevels.map((v, k) => (
           <line key={`${step}-${k}`} x1={x(v)} x2={x(v)} y1={yRuler - (step === 2 ? 7 : 13)} y2={yRuler + (step === 2 ? 7 : 13)}
-            stroke="var(--graphite)" strokeWidth={step === 2 ? 1 : 1.6} opacity={step === 2 ? 0.55 : 0.9} />
+            stroke="var(--ink)" strokeWidth={step === 2 ? 1 : 1.6} opacity={step === 2 ? 0.55 : 0.9} />
         ))}
         {e.original.map((v, k) => {
           const r = lerp(rounded[i0][k], rounded[i1][k], f)
@@ -55,8 +55,8 @@ function RulerFigure({ step }: { step: number }) {
           return (
             <g key={k}>
               <line x1={x(v)} y1={cy + 4} x2={x(r)} y2={yRuler - 16} stroke="var(--ember)" strokeOpacity={0.35} strokeWidth={1} />
-              <circle cx={x(v)} cy={cy} r={3.6} fill="var(--graphite)" />
-              <circle cx={x(r)} cy={yRuler} r={4.2} fill="var(--teal)" />
+              <circle cx={x(v)} cy={cy} r={3.6} fill="var(--ink)" />
+              <circle cx={x(r)} cy={yRuler} r={4.2} fill="var(--sage)" />
             </g>
           )
         })}

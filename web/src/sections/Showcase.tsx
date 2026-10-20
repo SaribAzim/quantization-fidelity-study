@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { AnswerCard, useReplay, useTyping } from '../components/Replay'
 import { FAMILY_COLOR, modelById, SHOWCASE, useData, type Model } from '../data'
 import { pct } from '../lib'
@@ -6,8 +6,7 @@ import { pct } from '../lib'
 const TITLES: Record<string, string> = {
   original: 'Original, 16 bit',
   naive_8bit: 'Naive 8 bit',
-  g128_l0131: 'Closest to the original, 4 bit',
-  per_row_vkod: 'Best exam score, 4 bit',
+  g128_l0131: 'Best 4 bit, closest to the original',
 }
 const SHARED_PACE = 22 // word pieces a second, the same for every column
 
@@ -52,13 +51,20 @@ export default function Showcase() {
 
   const play = (i?: number) => { if (i !== undefined) setIndex(i); setRunKey((k) => k + 1) }
 
+  // The page opens with the first question typing itself and the three answers streaming in.
+  useEffect(() => {
+    const t = window.setTimeout(() => setRunKey((k) => (k === 0 ? 1 : k)), 600)
+    return () => window.clearTimeout(t)
+  }, [])
+
   return (
-    <section id="answers" className="section wrap" aria-labelledby="answers-title">
+    <section id="answers" className="section wrap page-top" aria-labelledby="answers-title">
       <div className="section-head">
-        <h2 id="answers-title">Same question, four models</h2>
+        <h1 id="answers-title" className="page-title">Watch the models answer</h1>
         <p className="lede">
-          Real answers, recorded on one graphics card. The original and the 8 bit model are too large for 8 GB, so they ran from system memory,
-          about {slow} times slower than the 4 bit models. Here every answer replays at one shared pace; each column shows how fast that model really ran.
+          The same question for the original, the 8 bit model and the best 4 bit model. These are real answers, recorded on one graphics card.
+          The original and the 8 bit model are too large for 8 GB, so they ran from system memory, about {slow} times slower than the 4 bit model.
+          Here every answer replays at one shared pace; each column shows how fast that model really ran.
         </p>
       </div>
 
@@ -82,7 +88,7 @@ export default function Showcase() {
         <span className="note"><span className="legend-mark">Highlighted words</span> differ from the original's answer. Answers stop at 80 word pieces.</span>
       </div>
 
-      <div className="answers four">
+      <div className="answers three">
         {models.map((m, i) => (
           <AnswerCard
             key={m.id}

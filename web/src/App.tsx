@@ -1,15 +1,18 @@
 import { useEffect, useState } from 'react'
-import { DataContext, loadSiteData, REPO, type SiteData } from './data'
+import { DataContext, loadSiteData, PROJECT_PAGE, REPO, TEST_PAGE, type SiteData } from './data'
 import Hero from './sections/Hero'
 import Question from './sections/Question'
 import Rounding from './sections/Rounding'
-import Showcase from './sections/Showcase'
-import TryBest from './sections/TryBest'
 import Results from './sections/Results'
 import DidNotHelp from './sections/DidNotHelp'
 import Method from './sections/Method'
+import NextPage from './sections/NextPage'
+import Showcase from './sections/Showcase'
+import TestModel from './sections/TestModel'
 
-function Topbar() {
+export type Page = 'project' | 'test'
+
+function Topbar({ page }: { page: Page }) {
   const [scrolled, setScrolled] = useState(false)
   useEffect(() => {
     const on = () => setScrolled(window.scrollY > 8)
@@ -20,12 +23,10 @@ function Topbar() {
   return (
     <header className={`topbar${scrolled ? ' scrolled' : ''}`}>
       <div className="wrap topbar-inner">
-        <a className="brand" href="#top">Quantization Fidelity<span className="brand-long"> Study</span></a>
-        <nav className="navlinks" aria-label="Sections">
-          <a href="#answers">Answers</a>
-          <a href="#try">Try it</a>
-          <a href="#results">Results</a>
-          <a className="optional" href="#method">Method</a>
+        <a className="brand" href={PROJECT_PAGE}>Quantization Fidelity<span className="brand-long"> Study</span></a>
+        <nav className="navlinks" aria-label="Pages">
+          <a href={PROJECT_PAGE} aria-current={page === 'project' ? 'page' : undefined}>The project</a>
+          <a href={TEST_PAGE} aria-current={page === 'test' ? 'page' : undefined}>Test the model</a>
           <a className="optional" href={REPO}>Code</a>
         </nav>
       </div>
@@ -33,7 +34,7 @@ function Topbar() {
   )
 }
 
-export default function App() {
+export default function App({ page }: { page: Page }) {
   const [data, setData] = useState<SiteData | null>(null)
   const [error, setError] = useState<string | null>(null)
   useEffect(() => {
@@ -45,17 +46,23 @@ export default function App() {
 
   return (
     <DataContext.Provider value={data}>
-      <Topbar />
-      <main id="top">
-        <Hero />
-        <Question />
-        <Rounding />
-        <Showcase />
-        <TryBest />
-        <Results />
-        <DidNotHelp />
-        <Method />
-      </main>
+      <Topbar page={page} />
+      {page === 'project' ? (
+        <main>
+          <Hero />
+          <Question />
+          <Rounding />
+          <Results />
+          <DidNotHelp />
+          <Method />
+          <NextPage />
+        </main>
+      ) : (
+        <main className="test-page">
+          <Showcase />
+          <TestModel />
+        </main>
+      )}
       <footer className="footer">
         <div className="wrap footer-inner">
           <span>Built by Sarib Azim, on one RTX 3060 Ti with free tools.</span>

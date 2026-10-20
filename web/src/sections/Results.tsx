@@ -113,7 +113,7 @@ function RecoveryChart() {
               return (
                 <g key={k}>
                   <rect x={w >= 0 ? zero : zero - width} y={y + 18} width={width} height={16} rx={3}
-                    fill={v >= 0 ? 'var(--teal)' : 'var(--ember)'}
+                    fill={v >= 0 ? 'var(--sage)' : 'var(--ember)'}
                     style={{ transition: anim ? `width 800ms cubic-bezier(.65,0,.35,1) ${i * 60}ms, x 800ms cubic-bezier(.65,0,.35,1) ${i * 60}ms` : undefined }} />
                   <text x={w >= 0 ? zero + Math.abs(w) + 6 : zero - Math.abs(w) - 6} textAnchor={w >= 0 ? 'start' : 'end'} y={y + 30}
                     style={{ opacity: seen || !anim ? 1 : 0, transition: 'opacity 300ms 700ms' }}>{signedPct(v)}</text>
@@ -144,7 +144,7 @@ function SizeQuality() {
         {[0.48, 0.5, 0.52, 0.54, 0.56].map((t) => (
           <g key={t}><line className="gridline" x1={L} x2={W - R} y1={y(t)} y2={y(t)} /><text x={L - 8} y={y(t) + 4} textAnchor="end">{pct(t, 0)}</text></g>
         ))}
-        <rect x={L} y={T} width={x(8) - L} height={H - B - T} fill="var(--teal)" opacity={0.06} />
+        <rect x={L} y={T} width={x(8) - L} height={H - B - T} fill="var(--sage)" opacity={0.06} />
         <line x1={x(8)} x2={x(8)} y1={T} y2={H - B} stroke="var(--amber)" strokeWidth={2} />
         <text x={x(8) + 6} y={T + 12} className="strong">8 GB graphics card</text>
         <text x={(L + x(8)) / 2} y={H - 6} textAnchor="middle">fits</text>
@@ -153,7 +153,7 @@ function SizeQuality() {
           <g key={m.id} tabIndex={0} role="img" aria-label={`${m.label}: ${m.metrics.sizeGb.toFixed(1)} GB, exam ${pct(m.metrics.exam)}`}
             onMouseEnter={() => setHover(m)} onMouseLeave={() => setHover(null)} onFocus={() => setHover(m)} onBlur={() => setHover(null)} style={{ outline: 'none' }}>
             <circle cx={x(m.metrics.sizeGb)} cy={y(m.metrics.exam)} r={hover?.id === m.id ? 9 : 7} fill={FAMILY_COLOR[m.family]}
-              stroke="var(--paper)" strokeWidth={2} style={{ transition: 'r 150ms' }} />
+              stroke="var(--surface)" strokeWidth={2} style={{ transition: 'r 150ms' }} />
             {LABELS[m.id] && <text x={x(m.metrics.sizeGb) + 11} y={y(m.metrics.exam) + 4} className="strong">{LABELS[m.id]}</text>}
           </g>
         ))}

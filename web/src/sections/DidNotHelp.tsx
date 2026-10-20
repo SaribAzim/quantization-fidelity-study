@@ -21,7 +21,7 @@ function FixedBroken() {
           <g key={row.name}>
             <text className="strong" x={0} y={y + 18}>{row.name}</text>
             <rect x={mid - bw} y={y} width={bw} height={26} rx={3} fill="var(--ember)" style={{ transition: anim ? 'all 800ms cubic-bezier(.65,0,.35,1)' : undefined }} />
-            <rect x={mid} y={y} width={fw} height={26} rx={3} fill="var(--teal)" style={{ transition: anim ? 'all 800ms cubic-bezier(.65,0,.35,1)' : undefined }} />
+            <rect x={mid} y={y} width={fw} height={26} rx={3} fill="var(--sage)" style={{ transition: anim ? 'all 800ms cubic-bezier(.65,0,.35,1)' : undefined }} />
             <text x={mid - bw - 6} y={y + 18} textAnchor="end">{row.r.broken}</text>
             <text x={mid + fw + 6} y={y + 18}>{row.r.fixed}</text>
           </g>
