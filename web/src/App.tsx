@@ -63,7 +63,7 @@ export default function App({ page }: { page: Page }) {
       {page === 'workbench' && <main className="sub-page"><Workbench /></main>}
       <footer className="footer">
         <div className="wrap footer-inner">
-          <span>Built by Sarib Azim, on one RTX 3060 Ti with free tools.</span>
+          <span>Built on one RTX 3060 Ti with free tools.</span>
           <span><a href={REPO}>Source code and full results on GitHub</a></span>
           <span>Llama 3.1 is released by Meta under the Llama 3.1 Community License. No model weights are hosted here.</span>
           <span><a className="quiet-link" href={WORKBENCH_PAGE}>Workbench</a></span>
