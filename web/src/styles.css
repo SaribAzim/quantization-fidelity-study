@@ -122,6 +122,7 @@ button { font: inherit; color: inherit; }
 .hero-title { font-size: clamp(2.9rem, 10.2vw, 8.6rem); line-height: 0.92; font-weight: 760; letter-spacing: -0.035em; font-variation-settings: 'wdth' var(--wdth, 125); white-space: nowrap; margin-bottom: clamp(1.25rem, 3vh, 2.5rem); }
 .hero-char { display: inline-block; overflow: hidden; vertical-align: top; padding-block: 0.04em; }
 .hero-char > span { display: inline-block; }
+.hero-space { width: 0.3em; }
 .hero-sub { font-size: 1.2rem; line-height: 1.5; max-width: 26em; margin-bottom: 1.6rem; }
 @media (max-width: 960px) { .hero-sub { font-size: 1.05rem; margin-bottom: 1rem; } }
 @media (max-width: 960px) and (max-height: 720px) { .hero-sub { display: none; } }

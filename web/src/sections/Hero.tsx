@@ -109,7 +109,7 @@ export default function Hero() {
         <div className="wrap hero-inner">
           <h1 id="hero-title" className="hero-title" aria-label={TITLE} style={{ ['--wdth' as never]: wdth }}>
             {[...TITLE].map((ch, i) => (
-              <span key={i} className="hero-char" aria-hidden="true">
+              <span key={i} className={ch === ' ' ? 'hero-char hero-space' : 'hero-char'} aria-hidden="true">
                 <motion.span
                   initial={reduced ? false : { y: '105%' }}
                   animate={{ y: '0%' }}
