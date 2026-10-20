@@ -214,6 +214,6 @@ Evaluating a packed model takes about ten minutes on the reference machine.
 
 ## Licensing and data
 
-Llama 3.1 is released by Meta under the Llama 3.1 Community License; this repository contains no model weights. Datasets: WikiText-2 (perplexity and calibration), MMLU (exam), and Wikipedia text under CC BY-SA for the retrieval library, which is downloaded locally and not redistributed here.
+The code in this repository is released under the [MIT License](LICENSE). Llama 3.1 is released by Meta under the Llama 3.1 Community License; this repository contains no model weights. Datasets: WikiText-2 (perplexity and calibration), MMLU (exam), and Wikipedia text under CC BY-SA for the retrieval library, which is downloaded locally and not redistributed here.
 
 <p align="center"><sub>Sarib Azim &nbsp;·&nbsp; github.com/SaribAzim</sub></p>
