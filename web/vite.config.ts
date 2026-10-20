@@ -2,13 +2,13 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
 // The site is published at https://saribazim.github.io/quantization-fidelity-study/
-// Two pages: the project (index.html) and the model tester (test/index.html).
+// Three pages: the project (index.html), the model answers (answers/) and the author's workbench (workbench/).
 export default defineConfig({
   plugins: [react()],
   base: '/quantization-fidelity-study/',
   build: {
     rollupOptions: {
-      input: { project: 'index.html', test: 'test/index.html' },
+      input: { project: 'index.html', answers: 'answers/index.html', workbench: 'workbench/index.html' },
     },
   },
 })

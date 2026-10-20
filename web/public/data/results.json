@@ -231,9 +231,9 @@
    "label": "Naive 8 bit",
    "family": "8 bit",
    "runnable": false,
-   "gallery": false,
+   "gallery": true,
    "featured": null,
-   "note": "Almost lossless, but about 8.5 GB packed: just too large for the 8 GB GPU.",
+   "note": "Almost lossless, but about 8.5 GB packed: just too large for the 8 GB GPU, so its answers are recorded and replayed.",
    "metrics": {
     "perplexity": 11.463,
     "kl": 0.0016,

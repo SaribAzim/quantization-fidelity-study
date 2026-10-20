@@ -110,9 +110,16 @@ export function modelById(results: Results, id: string): Model {
 export const BEST = 'g128_l0131'
 export const SHOWCASE = ['original', 'naive_8bit', BEST] as const
 
-// The two pages of the site.
+// The pages of the site. The workbench is the author's testing page, linked only from the footer.
 export const PROJECT_PAGE = base
-export const TEST_PAGE = `${base}test/`
+export const ANSWERS_PAGE = `${base}answers/`
+export const WORKBENCH_PAGE = `${base}workbench/`
+
+/** Average recorded speed of a model across the gallery questions, in word pieces a second. */
+export function averageSpeed(gallery: Gallery, id: string): number | null {
+  const v = gallery.prompts.map((p) => p.answers[id]?.tokensPerSecond ?? 0).filter((x) => x > 0)
+  return v.length ? v.reduce((s, x) => s + x, 0) / v.length : null
+}
 
 export const REPO = 'https://github.com/SaribAzim/quantization-fidelity-study'
 export const code = (path: string) => `${REPO}/blob/main/${path}`

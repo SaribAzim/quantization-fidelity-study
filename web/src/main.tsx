@@ -7,6 +7,6 @@ import App from './App'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App page={document.body.dataset.page === 'test' ? 'test' : 'project'} />
+    <App page={(['answers', 'workbench'] as const).find((p) => p === document.body.dataset.page) ?? 'project'} />
   </StrictMode>,
 )

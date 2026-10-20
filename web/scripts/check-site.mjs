@@ -6,7 +6,7 @@ import { chromium } from 'playwright'
 import { mkdirSync } from 'node:fs'
 
 const ROOT = process.env.SITE_URL || 'http://localhost:4173/quantization-fidelity-study/'
-const PAGES = [{ name: 'project', path: '' }, { name: 'test', path: 'test/' }]
+const PAGES = [{ name: 'project', path: '' }, { name: 'answers', path: 'answers/' }, { name: 'workbench', path: 'workbench/' }]
 const DASHES = /[-‐‑‒–—―]/g
 const VIEWS = [
   { name: 'desktop', width: 1440, height: 900, colorScheme: 'light' },

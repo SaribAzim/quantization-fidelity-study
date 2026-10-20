@@ -63,6 +63,21 @@ export function useTyping(text: string, runKey: number, charsPerSecond = 55) {
   return text.slice(0, shown)
 }
 
+/** For each word piece of an answer: true if all its characters fall in stretches shared with the original's answer. */
+export function pieceAgreement(answer: Answer): boolean[] {
+  const sameAt: boolean[] = []
+  for (const [text, same] of answer.diff) for (let k = 0; k < text.length; k++) sameAt.push(same)
+  const out: boolean[] = []
+  let pos = 0
+  for (const piece of answer.pieces) {
+    let ok = true
+    for (let k = 0; k < piece.length; k++) if (sameAt[pos + k] === false && piece[k].trim()) ok = false
+    out.push(ok)
+    pos += piece.length
+  }
+  return out
+}
+
 /** The visible part of an answer, with stretches that differ from the original highlighted. */
 export function DiffText({ answer, count, showDiff }: { answer: Answer; count: number; showDiff: boolean }) {
   const visible = answer.pieces.slice(0, count).join('').length

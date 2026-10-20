@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { motion } from 'motion/react'
 import WeightGrid from '../components/WeightGrid'
-import { modelById, TEST_PAGE, useData } from '../data'
+import { ANSWERS_PAGE, modelById, useData } from '../data'
 import { prefersReducedMotion } from '../lib'
 
 const GPU_GB = 8
@@ -144,7 +144,7 @@ export default function Hero() {
               </div>
 
               <div className="hero-actions">
-                <a className="btn" href={TEST_PAGE}>Test the model</a>
+                <a className="btn" href={ANSWERS_PAGE}>Watch it answer</a>
                 <a className="btn quiet" href="#study">Read the study</a>
               </div>
             </motion.div>

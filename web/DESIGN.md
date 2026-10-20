@@ -14,9 +14,10 @@ Written following `SKILL.md` (frontend design): plan the tokens first, review th
 | Page | File | Content |
 |---|---|---|
 | The project | `index.html` | Pinned hero where scrolling quantizes the model, the question, the rounding explainer, results, what did not help, how it was built, a closing link to the test page |
-| Test the model | `test/index.html` | Answer replays of the original, the 8 bit model and the best 4 bit model; a tester for the best 4 bit model (recorded answers for everyone, live questions when the local backend runs) |
+| Model answers | `answers/index.html` | A profile with four small charts for the original, 8 bit and best 4 bit models; the side by side replay with highlighted differences and an agreement strip per answer; word similarity across all ten questions |
+| Workbench | `workbench/index.html` | The author's testing page, linked only from the footer and marked noindex: recorded answers for every model, live questions to the 4 bit models when the local backend runs |
 
-Both pages share one script (`src/main.tsx`), which reads `data-page` on the body.
+All pages share one script (`src/main.tsx`), which reads `data-page` on the body.
 
 ## Tokens
 

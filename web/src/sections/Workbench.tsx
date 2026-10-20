@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { DiffText, useReplay } from '../components/Replay'
-import { BEST, modelById, PROJECT_PAGE, useData } from '../data'
+import { averageSpeed, BEST, FAMILY_COLOR, PROJECT_PAGE, useData } from '../data'
 import { num, pct, useSeenOnce } from '../lib'
 
 const API = 'http://127.0.0.1:8000'
@@ -9,16 +9,17 @@ const SPEEDS = [{ label: 'Real speed', speed: 1 }, { label: '4 times', speed: 4 
 type LiveState = { status: 'idle' | 'queued' | 'loading' | 'streaming' | 'done' | 'error'; text: string; tokens: number; tps: number | null; message?: string }
 const idle = (): LiveState => ({ status: 'idle', text: '', tokens: 0, tps: null })
 
-/** Asks the local backend (deployment/server.py) whether it is running. Never called automatically on the public site. */
-async function probe(): Promise<boolean> {
+/** Asks the local backend (deployment/server.py) which models it can run. Never called automatically on the public site. */
+async function probe(): Promise<string[] | null> {
   try {
     const ctrl = new AbortController()
     const t = window.setTimeout(() => ctrl.abort(), 1500)
-    const r = await fetch(`${API}/api/health`, { signal: ctrl.signal })
+    const r = await fetch(`${API}/api/models`, { signal: ctrl.signal })
     window.clearTimeout(t)
-    return r.ok
+    if (!r.ok) return null
+    return ((await r.json()) as { id: string }[]).map((m) => m.id)
   } catch {
-    return false
+    return null
   }
 }
 
@@ -55,44 +56,55 @@ function liveLine(s: LiveState): string {
   }
 }
 
-export default function TestModel() {
+export default function Workbench() {
   const { results, gallery } = useData()
-  const model = modelById(results, BEST)
-  const original = modelById(results, 'original')
-  const plain = modelById(results, results.baselineId)
-  const prompts = gallery.prompts.filter((p) => p.answers[BEST])
-  const speeds = prompts.map((p) => p.answers[BEST].tokensPerSecond ?? 0).filter((v) => v > 0)
-  const avgSpeed = speeds.reduce((s, v) => s + v, 0) / Math.max(1, speeds.length)
+  // Every model with recorded answers, best 4 bit first, then by distance from the original.
+  const models = useMemo(() => results.models
+    .filter((m) => gallery.prompts.some((p) => p.answers[m.id]))
+    .sort((a, b) => (a.id === BEST ? -1 : b.id === BEST ? 1 : (a.metrics.kl ?? -1) - (b.metrics.kl ?? -1))), [results, gallery])
+  const original = results.models.find((m) => m.id === 'original')!
+
+  const [modelId, setModelId] = useState(BEST)
+  const model = models.find((m) => m.id === modelId) ?? models[0]
+  const prompts = gallery.prompts.filter((p) => p.answers[model.id])
 
   const [mode, setMode] = useState<'recorded' | 'live'>('recorded')
   const [index, setIndex] = useState(0)
   const [speedIndex, setSpeedIndex] = useState(1)
   const [runKey, setRunKey] = useState(0)
   const [showDiff, setShowDiff] = useState(false)
-  const [live, setLive] = useState<'unknown' | 'checking' | 'on' | 'off'>('unknown')
+  const [live, setLive] = useState<'unknown' | 'checking' | 'off' | string[]>('unknown')
   const [question, setQuestion] = useState('')
   const [liveQuestion, setLiveQuestion] = useState('')
   const [liveState, setLiveState] = useState<LiveState>(idle())
   const abort = useRef<AbortController | null>(null)
   const [panelRef, seen] = useSeenOnce<HTMLDivElement>(0.35)
 
-  const prompt = prompts[index]
-  const answer = prompt.answers[BEST]
+  const prompt = prompts[Math.min(index, prompts.length - 1)]
+  const answer = prompt.answers[model.id]
   const { counts, playing } = useReplay([answer], { mode: 'real', speed: SPEEDS[speedIndex].speed }, runKey)
   const count = counts[0]
 
-  // The first answer starts by itself when the tester comes into view.
   useEffect(() => { if (seen) setRunKey((k) => (k === 0 ? 1 : k)) }, [seen])
 
   const check = useCallback(async () => {
     setLive('checking')
-    setLive((await probe()) ? 'on' : 'off')
+    setLive((await probe()) ?? 'off')
   }, [])
   // On the author's own machine the backend is looked for automatically; on the public site only after a click.
   useEffect(() => {
     if (['localhost', '127.0.0.1'].includes(window.location.hostname)) check()
   }, [check])
 
+  const connected = Array.isArray(live)
+  const canRunLive = connected && live.includes(model.id)
+
+  const chooseModel = (id: string) => {
+    abort.current?.abort()
+    setModelId(id)
+    setMode('recorded')
+    setRunKey((k) => k + 1)
+  }
   const pick = (i: number) => {
     abort.current?.abort()
     setMode('recorded')
@@ -103,7 +115,7 @@ export default function TestModel() {
 
   const ask = async () => {
     const q = question.trim()
-    if (!q) return
+    if (!q || !canRunLive) return
     abort.current?.abort()
     const ctrl = new AbortController()
     abort.current = ctrl
@@ -112,7 +124,7 @@ export default function TestModel() {
     setQuestion('')
     setLiveState({ ...idle(), status: 'queued' })
     try {
-      await streamAnswer(BEST, q, ctrl.signal, (e) => {
+      await streamAnswer(model.id, q, ctrl.signal, (e) => {
         if (e.type === 'loading') setLiveState((s) => ({ ...s, status: 'loading' }))
         if (e.type === 'ready') setLiveState((s) => ({ ...s, status: 'streaming' }))
         if (e.type === 'token') setLiveState((s) => ({ ...s, status: 'streaming', text: s.text + String(e.text) }))
@@ -127,39 +139,83 @@ export default function TestModel() {
 
   const liveBusy = mode === 'live' && ['queued', 'loading', 'streaming'].includes(liveState.status)
   const elapsed = count > 0 ? answer.times[count - 1] : 0
+  const isRef = model.id === 'original'
   const recordedLine = runKey === 0
     ? 'The answer starts when this panel comes into view.'
     : playing
       ? `${num(elapsed, 1)} s of recorded time, ${count} word pieces so far.`
-      : `Recorded on an RTX 3060 Ti: ${answer.pieces.length} word pieces in ${num(answer.times[answer.times.length - 1] ?? 0, 1)} s. Same opening as the original for ${answer.identicalTokens} word pieces; ${Math.round(answer.wordSimilarity * 100)}% of the wording matches.`
+      : `Recorded on an RTX 3060 Ti: ${answer.pieces.length} word pieces in ${num(answer.times[answer.times.length - 1] ?? 0, 1)} s.`
+        + (isRef ? '' : ` Same opening as the original for ${answer.identicalTokens} word pieces; ${Math.round(answer.wordSimilarity * 100)}% of the wording matches.`)
+  const placeholder = !connected
+    ? 'Live questions need the backend on this computer. Pick a recorded question below.'
+    : canRunLive ? 'Ask anything, for example: explain what a cache miss is in two sentences'
+      : 'This model is too large to run live on an 8 GB card. Choose a 4 bit model to ask your own question.'
+  const speed = averageSpeed(gallery, model.id)
 
   return (
-    <section id="test" className="section wrap" aria-labelledby="test-title">
+    <section className="section wrap page-top" aria-labelledby="bench-title">
       <div className="section-head">
-        <h2 id="test-title">Test the best 4 bit model</h2>
+        <h1 id="bench-title" className="page-title">Workbench</h1>
         <p className="lede">
-          Groups of 128 with layers 0, 1 and 31 kept at 8 bit: the version closest to the original. Pick a question to watch its recorded answer
-          at the speed it really ran, or faster. When the backend runs on your own computer, you can ask it anything.
+          The testing bench for every quantized model in the study. Replay any model's recorded answers, or, with the backend running on this computer,
+          ask the 4 bit models your own questions live.
         </p>
       </div>
 
-      <div className="tester">
+      <div className="bench">
+        <aside className="bench-side">
+          <h2 className="side-title">Models</h2>
+          <ul className="model-list">
+            {models.map((m) => (
+              <li key={m.id}>
+                <button type="button" className="model-item" aria-pressed={m.id === model.id} onClick={() => chooseModel(m.id)}
+                  style={{ ['--accent' as never]: FAMILY_COLOR[m.family] }}>
+                  <span className="model-name">{m.label}</span>
+                  <span className="model-meta">{m.metrics.sizeGb.toFixed(1)} GB, exam {pct(m.metrics.exam)}
+                    {connected && <>, {live.includes(m.id) ? 'live ready' : 'recorded only'}</>}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+
+          <div className="live-box">
+            <p className="live-status ui"><span className={`dot${connected ? ' on' : ''}`} aria-hidden="true" />
+              {connected ? `Live backend connected: ${live.length} models can run here.` : live === 'checking' ? 'Looking for a live backend.' : live === 'off' ? 'No live backend found.' : 'Live questions run on this computer.'}</p>
+            {!connected && (
+              <>
+                <p className="note">
+                  Start it from the project folder with <code>deployment/run_live.ps1</code>. It needs a graphics card with 8 GB and the quantized model folders,
+                  which this project's scripts build from Meta's weights; they are not stored in the repository.
+                </p>
+                <button type="button" className="btn quiet small" onClick={check} disabled={live === 'checking'}>Connect to a local backend</button>
+              </>
+            )}
+          </div>
+        </aside>
+
         <div className="console" ref={panelRef}>
-          <div className="console-head">
+          <div className="console-head" style={{ ['--accent' as never]: FAMILY_COLOR[model.family] }}>
             <span className={`dot${liveBusy || playing ? ' on' : ''}`} aria-hidden="true" />
             <strong>{model.label}</strong>
             <span className="console-mode">{mode === 'live' ? 'Live on this computer' : 'Recorded answer'}</span>
           </div>
+          <dl className="console-facts">
+            <div><dt>Size</dt><dd>{model.metrics.sizeGb.toFixed(2)} GB</dd></div>
+            <div><dt>Exam</dt><dd>{pct(model.metrics.exam)}</dd></div>
+            <div><dt>Same next word</dt><dd>{isRef ? 'Reference' : pct(model.metrics.top1)}</dd></div>
+            <div><dt>Distance</dt><dd>{model.metrics.kl === null ? 'Reference' : num(model.metrics.kl, 3)}</dd></div>
+            <div><dt>Recorded speed</dt><dd>{speed ? `${num(speed, 2)} a second` : 'None'}</dd></div>
+          </dl>
 
           <div className="transcript">
             <div className="bubble q">
               <span className="who">Question</span>
               {mode === 'live' ? liveQuestion : prompt.prompt}
             </div>
-            <div className="bubble a">
-              <span className="who">4 bit model</span>
+            <div className="bubble a" style={{ ['--accent' as never]: FAMILY_COLOR[model.family] }}>
+              <span className="who">{model.label}</span>
               <div className="answer-text" data-quote="model answer" aria-live="polite">
-                {mode === 'live' ? liveState.text : <DiffText answer={answer} count={count} showDiff={showDiff} />}
+                {mode === 'live' ? liveState.text : <DiffText answer={answer} count={count} showDiff={showDiff && !isRef} />}
                 {(mode === 'live' ? liveState.status === 'streaming' : playing) && <span className="caret" aria-hidden="true" />}
               </div>
             </div>
@@ -168,19 +224,19 @@ export default function TestModel() {
 
           <div className="composer">
             <label className="visually-hidden" htmlFor="ask">Your question</label>
-            <textarea id="ask" value={question} maxLength={2000} rows={2} disabled={live !== 'on'}
+            <textarea id="ask" value={question} maxLength={2000} rows={2} disabled={!canRunLive}
               onChange={(e) => setQuestion(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (!liveBusy) ask() } }}
-              placeholder={live === 'on' ? 'Ask anything, for example: explain what a cache miss is in two sentences' : 'Typing your own question needs the backend on your computer. Pick a question below.'} />
+              placeholder={placeholder} />
             {liveBusy
               ? <button type="button" className="btn quiet" onClick={stop}>Stop</button>
-              : <button type="button" className="btn" onClick={ask} disabled={live !== 'on' || !question.trim()}>Ask</button>}
+              : <button type="button" className="btn" onClick={ask} disabled={!canRunLive || !question.trim()}>Ask</button>}
           </div>
 
           <div className="console-foot">
             <div className="prompt-list" role="group" aria-label="Recorded questions">
               {prompts.map((p, i) => (
-                <button key={p.id} type="button" className="chip" aria-pressed={mode === 'recorded' && i === index} title={p.prompt} onClick={() => pick(i)}>
+                <button key={p.id} type="button" className="chip" aria-pressed={mode === 'recorded' && p.id === prompt.id} title={p.prompt} onClick={() => pick(i)}>
                   {p.topic}: {p.prompt.split('\n')[0]}
                 </button>
               ))}
@@ -192,38 +248,17 @@ export default function TestModel() {
                 ))}
               </div>
               <button type="button" className="btn quiet" onClick={() => { setMode('recorded'); setRunKey((k) => k + 1) }} disabled={playing}>Play again</button>
-              <label className="toggle ui">
-                <input type="checkbox" checked={showDiff} onChange={(e) => setShowDiff(e.target.checked)} />
-                Mark words that differ from the original
-              </label>
+              {!isRef && (
+                <label className="toggle ui">
+                  <input type="checkbox" checked={showDiff} onChange={(e) => setShowDiff(e.target.checked)} />
+                  Mark words that differ from the original
+                </label>
+              )}
             </div>
           </div>
         </div>
-
-        <aside className="model-card" aria-label="About this model">
-          <h3>Closest to the original</h3>
-          <p className="note">{model.note}</p>
-          <dl className="facts">
-            <div><dt>Size</dt><dd>{model.metrics.sizeGb.toFixed(2)} GB <span className="fit">fits 8 GB</span></dd></div>
-            <div><dt>Exam, 412 questions</dt><dd>{pct(model.metrics.exam)} <span className="vs">original {pct(original.metrics.exam)}</span></dd></div>
-            <div><dt>Same next word as the original</dt><dd>{pct(model.metrics.top1)}</dd></div>
-            <div><dt>Distance from the original</dt><dd>{num(model.metrics.kl ?? 0, 3)} <span className="vs">plain 4 bit {num(plain.metrics.kl ?? 0, 3)}</span></dd></div>
-            <div><dt>Speed on an RTX 3060 Ti, average</dt><dd>{num(avgSpeed, 2)} word pieces a second</dd></div>
-          </dl>
-          <a href={`${PROJECT_PAGE}#study`}>How this model was made</a>
-
-          <div className="live-box">
-            <p className="live-status ui"><span className={`dot${live === 'on' ? ' on' : ''}`} aria-hidden="true" />
-              {live === 'on' ? 'Live backend connected.' : live === 'checking' ? 'Looking for a live backend.' : live === 'off' ? 'No live backend found.' : 'Live questions run on your own computer.'}</p>
-            {live !== 'on' && (
-              <>
-                <p className="note">With a GPU of 8 GB or more, clone the repository and run <code>deployment/run_live.ps1</code>, then connect.</p>
-                <button type="button" className="btn quiet small" onClick={check} disabled={live === 'checking'}>Connect to a local backend</button>
-              </>
-            )}
-          </div>
-        </aside>
       </div>
+      <p className="note bench-foot">Original exam score for comparison: {pct(original.metrics.exam)}. <a href={`${PROJECT_PAGE}#study`}>How the models were made</a></p>
     </section>
   )
 }
