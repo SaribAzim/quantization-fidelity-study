@@ -9,6 +9,11 @@
 </p>
 
 <p align="center">
+  <a href="https://saribazim.github.io/quantization-fidelity-study/"><strong>Live site</strong></a> &nbsp;·&nbsp;
+  <a href="https://saribazim.github.io/quantization-fidelity-study/answers/"><strong>Watch the models answer</strong></a>
+</p>
+
+<p align="center">
   <a href="#results">Results</a> &nbsp;·&nbsp;
   <a href="#findings">Findings</a> &nbsp;·&nbsp;
   <a href="#how-it-works">How it works</a> &nbsp;·&nbsp;
@@ -210,7 +215,8 @@ Evaluating a packed model takes about ten minutes on the reference machine.
 > - The headline mixed-precision exam gain has p = 0.08 on exam answers alone.
 > - Fidelity is measured on WikiText text; behaviour on other text was not measured.
 > - Generation is slow (about 1.5 tokens per second) because packed layers are unpacked in plain PyTorch. Real 4-bit speed needs compiled kernels that could not be built on this Windows setup.
-> - Not yet done: distillation-style QLoRA, the full 57-subject MMLU, comparison with GPTQModel and bitsandbytes, and a deployed demo.
+> - Not yet done: distillation-style QLoRA, the full 57-subject MMLU, and comparison with GPTQModel and bitsandbytes.
+> - The [website](https://saribazim.github.io/quantization-fidelity-study/) replays recorded answers; live questions need the backend (`deployment/run_live.ps1`) on a local 8 GB GPU with the quantized models built.
 
 ## Licensing and data
 
