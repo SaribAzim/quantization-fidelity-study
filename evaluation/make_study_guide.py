@@ -193,7 +193,7 @@ S += table([["Folder or file", "What it holds"],
             [code("web/"), "The website (React, TypeScript, Vite)"],
             [code("results/"), "Every measured result as a data file, plus figures"]],
            [6.4, 10.2])
-S += [PageBreak()]
+S += [Spacer(1, 14)]
 
 # ================= Part 5 =================
 S += [P("Part 5. What was found", h1)]
