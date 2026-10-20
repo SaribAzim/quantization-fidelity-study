@@ -41,9 +41,11 @@ OUT = "web/public/data/gallery.json"
 def load(model_id):
     m = by_id(model_id)
     t0 = time.time()
-    if model_id == "original":
+    if model_id == "original" or not os.path.exists(os.path.join(m["folder"], "packed_config.json")):
+        # The original, and models saved as ordinary 16 bit files (the naive 8 bit model), do not fit
+        # the GPU: they load offloaded across GPU, RAM and disk, and run slowly.
         from load_model import load_model_from
-        model, tokenizer = load_model_from(ORIGINAL_REPO)
+        model, tokenizer = load_model_from(ORIGINAL_REPO if model_id == "original" else m["folder"])
     else:
         from quantization.packed import load_lora_state, load_packed_model
         model, tokenizer = load_packed_model(m["folder"])

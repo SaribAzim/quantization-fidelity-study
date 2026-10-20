@@ -36,8 +36,9 @@ CATALOG = [
          folder="quantized_models/packed_naive_4bit", adapters="quantized_models/qlora/adapters_r16.pt", runnable=True, gallery=True, featured=None,
          note="Small trained adapters on top of plain 4 bit. Better at predicting text, further from the original."),
     # Results only (not runnable on 8 GB as real packed models, or not worth serving)
-    dict(id="naive_8bit", label="Naive 8 bit", family="8 bit", result="naive_quant_8bit", runnable=False, gallery=False, featured=None,
-         note="Almost lossless, but about 8.5 GB packed: just too large for the 8 GB GPU."),
+    dict(id="naive_8bit", label="Naive 8 bit", family="8 bit", result="naive_quant_8bit", folder="quantized_models/naive_8bit",
+         runnable=False, gallery=True, featured=None,
+         note="Almost lossless, but about 8.5 GB packed: just too large for the 8 GB GPU, so its answers are recorded and replayed."),
     dict(id="per_row_l0131", label="Per row + 8 bit layers 0, 1, 31", family="Mixed precision", result="packed_mixed_top3", runnable=False, gallery=False, featured=None,
          note="Protecting three layers improves fidelity but not the exam."),
     dict(id="per_row_8layers", label="Per row + 8 bit for 8 layers", family="Mixed precision", result="packed_mixed_layers", runnable=False, gallery=False, featured=None,

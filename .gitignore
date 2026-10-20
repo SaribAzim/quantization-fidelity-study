@@ -38,3 +38,9 @@ quantized_models/
 # regenerable reference predictions used for sensitivity tests
 results/mixed/*.pt
 
+
+# website build output and dependencies
+web/node_modules/
+web/dist/
+web/screenshots/
+
